@@ -1,4 +1,4 @@
-package com.pdonha.pix.domain;
+package com.pdonha.pix.domain.model;
 
 import java.math.BigDecimal;
 
