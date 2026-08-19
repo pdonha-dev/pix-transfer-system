@@ -7,7 +7,6 @@ public final class Customer {
     private final String name;
     private final String cpf;
 
-
     public Customer(UUID id, String name, String cpf) {
         if (id == null) {
             throw new IllegalArgumentException("Id não pode ser nulo");
