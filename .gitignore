@@ -64,4 +64,7 @@ Thumbs.db
 # Environment / secrets
 *.env
 .env
-
+.env.local
+.env.production
+.env.staging
+.env.test

@@ -1,8 +1,5 @@
 package com.pdonha.pix.domain.exception;
 
-/**
- * Thrown when attempting to unblock an account that is already active.
- */
 public class AccountAlreadyActiveException extends PixException {
     private final String accountIdHash;
 

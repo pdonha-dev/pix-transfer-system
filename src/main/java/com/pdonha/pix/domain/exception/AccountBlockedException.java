@@ -1,8 +1,5 @@
 package com.pdonha.pix.domain.exception;
 
-/**
- * Thrown when attempting to block an account that is already blocked.
- */
 public class AccountBlockedException extends PixException {
     private final String accountIdHash;
 

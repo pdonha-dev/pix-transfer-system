@@ -1,8 +1,5 @@
 package com.pdonha.pix.domain.exception;
 
-/**
- * Thrown when a CPF (tax ID) fails validation.
- */
 public class InvalidCpfException extends PixException {
     private String cpfHash;
 
