@@ -49,6 +49,9 @@ public class CreatePixTransferService {
         originAccount.withdraw(new Money(cmd.getAmount()));
         destAccount.deposit(new Money(cmd.getAmount()));
 
+        accountRepository.save(originAccount);
+        accountRepository.save(destAccount);
+
         Transfer transfer = new Transfer(
                 UUID.randomUUID(),
                 originAccount.getId(),
