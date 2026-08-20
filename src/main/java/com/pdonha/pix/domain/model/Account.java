@@ -1,5 +1,11 @@
 package com.pdonha.pix.domain.model;
 
+import com.pdonha.pix.domain.exception.AccountAlreadyActiveException;
+import com.pdonha.pix.domain.exception.AccountBlockedException;
+import com.pdonha.pix.domain.exception.DailyLimitExceededException;
+import com.pdonha.pix.domain.exception.InsufficientBalanceException;
+import com.pdonha.pix.domain.exception.PixException;
+
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.UUID;
@@ -16,22 +22,22 @@ public class Account {
 
     public Account(UUID id, UUID customerId, Money initialBalance, Money dailyLimit) {
         if(id == null) {
-            throw new IllegalArgumentException("Id não pode ser nulo");
+            throw new PixException("Account ID cannot be null");
         }
         if(customerId == null) {
-            throw new IllegalArgumentException("Id do cliente não pode ser nulo");
+            throw new PixException("Customer ID cannot be null");
         }
         if(initialBalance == null) {
-            throw new IllegalArgumentException("Saldo inicial não pode ser nulo");
+            throw new PixException("Initial balance cannot be null");
         }
         if(!initialBalance.isGreaterThanOrEqual(new Money(BigDecimal.ZERO))) {
-            throw new IllegalArgumentException("Saldo inicial não pode ser negativo");
+            throw new PixException("Initial balance cannot be negative");
         }
         if(dailyLimit == null) {
-            throw new IllegalArgumentException("Limite diário não pode ser nulo");
+            throw new PixException("Daily limit cannot be null");
         }
         if(dailyLimit.isLessThan(new Money(BigDecimal.ONE))) {
-            throw new IllegalArgumentException("Limite diário deve ser maior que zero");
+            throw new PixException("Daily limit must be at least 1.00");
         }
 
         this.id = id;
@@ -78,7 +84,7 @@ public class Account {
 
     public void deposit(Money amount) {
         if (!isActive) {
-            throw new IllegalArgumentException("Conta bloqueada");
+            throw new AccountBlockedException("Account is blocked", id.toString());
         }
         this.balance = balance.add(amount);
         this.updatedAt = LocalDateTime.now();
@@ -86,13 +92,13 @@ public class Account {
 
     public void withdraw(Money amount) {
         if (!isActive) {
-            throw new IllegalArgumentException("Conta bloqueada");
+            throw new AccountBlockedException("Account is blocked", id.toString());
         }
         if (balance.isLessThan(amount)) {
-            throw new IllegalArgumentException("Saldo insuficiente");
+            throw new InsufficientBalanceException("Insufficient balance for withdrawal");
         }
         if (dailyLimit.isLessThan(dailyUsed.add(amount))) {
-            throw new IllegalArgumentException("Limite diário excedido");
+            throw new DailyLimitExceededException("Daily transfer limit exceeded");
         }
         this.balance = balance.subtract(amount);
         this.dailyUsed = dailyUsed.add(amount);
@@ -101,7 +107,7 @@ public class Account {
 
     public void block() {
         if (!isActive) {
-            throw new IllegalArgumentException("Conta já está bloqueada");
+            throw new AccountBlockedException("Account is already blocked", id.toString());
         }
         this.isActive = false;
         this.updatedAt = LocalDateTime.now();
@@ -109,7 +115,7 @@ public class Account {
 
     public void unblock() {
         if (isActive) {
-            throw new IllegalArgumentException("Conta já está ativa");
+            throw new AccountAlreadyActiveException("Account is already active", id.toString());
         }
         this.isActive = true;
         this.updatedAt = LocalDateTime.now();

@@ -1,5 +1,8 @@
 package com.pdonha.pix.domain.model;
 
+import com.pdonha.pix.domain.exception.InvalidCpfException;
+import com.pdonha.pix.domain.exception.PixException;
+
 import java.util.UUID;
 
 public final class Customer {
@@ -9,13 +12,13 @@ public final class Customer {
 
     public Customer(UUID id, String name, String cpf) {
         if (id == null) {
-            throw new IllegalArgumentException("Id não pode ser nulo");
+            throw new PixException("Customer ID cannot be null");
         }
         if (name == null || name.isBlank()) {
-            throw new IllegalArgumentException("Nome não pode ser vazio");
+            throw new PixException("Customer name cannot be null or empty");
         }
         if (cpf == null || !cpf.matches("\\d{11}")) {
-            throw new IllegalArgumentException("CPF inválido");
+            throw new InvalidCpfException("CPF must contain exactly 11 digits", cpf);
         }
 
         this.id = id;

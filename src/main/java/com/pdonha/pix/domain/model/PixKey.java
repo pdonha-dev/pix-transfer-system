@@ -1,5 +1,8 @@
 package com.pdonha.pix.domain.model;
 
+import com.pdonha.pix.domain.exception.PixException;
+import com.pdonha.pix.domain.exception.PixKeyInvalidException;
+
 import java.time.LocalDateTime;
 import java.util.UUID;
 
@@ -14,16 +17,16 @@ public class PixKey {
 
     public PixKey(UUID id, UUID accountId, PixKeyType type, String value) {
         if (id == null) {
-            throw new IllegalArgumentException("Id não pode ser nulo");
+            throw new PixException("Pix key ID cannot be null");
         }
         if (accountId == null) {
-            throw new IllegalArgumentException("AccountId não pode ser nulo");
+            throw new PixException("Account ID cannot be null");
         }
         if (type == null) {
-            throw new IllegalArgumentException("Tipo da chave não pode ser nulo");
+            throw new PixException("Pix key type cannot be null");
         }
         if (!type.isValid(value)) {
-            throw new IllegalArgumentException("Valor da chave inválido para o tipo " + type);
+            throw new PixKeyInvalidException("Pix key value does not match the specified type");
         }
 
         this.id = id;
@@ -65,7 +68,7 @@ public class PixKey {
 
     public void block() {
         if (!active) {
-            throw new IllegalArgumentException("Chave já está desativada");
+            throw new PixException("Pix key is already blocked");
         }
         this.active = false;
         this.updatedAt = LocalDateTime.now();
@@ -73,7 +76,7 @@ public class PixKey {
 
     public void unblock() {
         if (active) {
-            throw new IllegalArgumentException("Chave já está ativa");
+            throw new PixException("Pix key is already active");
         }
         this.active = true;
         this.updatedAt = LocalDateTime.now();

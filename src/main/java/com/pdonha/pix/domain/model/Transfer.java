@@ -1,6 +1,9 @@
 package com.pdonha.pix.domain.model;
 
-import java.math.BigDecimal;
+import com.pdonha.pix.domain.exception.InvalidTransferException;
+import com.pdonha.pix.domain.exception.InvalidTransferStatusException;
+import com.pdonha.pix.domain.exception.PixException;
+
 import java.time.LocalDateTime;
 import java.util.UUID;
 
@@ -16,19 +19,19 @@ public class Transfer {
 
     public Transfer(UUID id, UUID payerAccountId, UUID payeeAccountId, Money amount) {
         if (id == null) {
-            throw new IllegalArgumentException("Id não pode ser nulo");
+            throw new PixException("Transfer ID cannot be null");
         }
         if (payerAccountId == null) {
-            throw new IllegalArgumentException("PayerAccountId não pode ser nulo");
+            throw new PixException("Payer account ID cannot be null");
         }
         if (payeeAccountId == null) {
-            throw new IllegalArgumentException("PayeeAccountId não pode ser nulo");
+            throw new PixException("Payee account ID cannot be null");
         }
         if (amount == null) {
-            throw new IllegalArgumentException("Amount não pode ser nulo");
+            throw new PixException("Transfer amount cannot be null");
         }
         if (payeeAccountId.equals(payerAccountId)) {
-            throw new IllegalArgumentException("PayerAccountId e PayeeAccountId não podem ser iguais");
+            throw new InvalidTransferException("Cannot transfer to the same account");
         }
 
         this.id = id;
@@ -70,7 +73,7 @@ public class Transfer {
 
     public void complete() {
         if (this.status != TransferStatus.PENDING) {
-            throw new IllegalStateException("Transfer já está " + this.status);
+            throw new InvalidTransferStatusException("Transfer is not in pending state");
         }
 
         this.status = TransferStatus.COMPLETED;
@@ -79,7 +82,7 @@ public class Transfer {
 
     public void fail() {
         if (this.status != TransferStatus.PENDING) {
-            throw new IllegalStateException("Transfer já está " + this.status);
+            throw new InvalidTransferStatusException("Transfer is not in pending state");
         }
 
         this.status = TransferStatus.FAILED;
@@ -88,7 +91,7 @@ public class Transfer {
 
     public void cancel() {
         if (this.status != TransferStatus.PENDING) {
-            throw new IllegalStateException("Transfer já está " + this.status);
+            throw new InvalidTransferStatusException("Transfer is not in pending state");
         }
 
         this.status = TransferStatus.CANCELLED;
