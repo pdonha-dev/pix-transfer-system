@@ -2,6 +2,7 @@ package com.pdonha.pix.domain.model;
 
 import com.pdonha.pix.domain.exception.PixException;
 import com.pdonha.pix.domain.exception.PixKeyInvalidException;
+import com.pdonha.pix.domain.exception.PixKeyInvalidException;
 
 import java.time.LocalDateTime;
 import java.util.UUID;
@@ -68,7 +69,7 @@ public class PixKey {
 
     public void block() {
         if (!active) {
-            throw new PixException("Pix key is already blocked");
+            throw new PixKeyInvalidException("Pix key is already blocked");
         }
         this.active = false;
         this.updatedAt = LocalDateTime.now();
@@ -76,7 +77,7 @@ public class PixKey {
 
     public void unblock() {
         if (active) {
-            throw new PixException("Pix key is already active");
+            throw new PixKeyInvalidException("Pix key is already active");
         }
         this.active = true;
         this.updatedAt = LocalDateTime.now();
