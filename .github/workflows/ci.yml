@@ -24,7 +24,7 @@ jobs:
         uses: actions/setup-java@v4
         with:
           java-version: ${{ env.JAVA_VERSION }}
-          distribution: 'eclipse-temurin'
+          distribution: 'temurin'
           cache: maven
 
       - name: Run Maven compile (triggers CheckStyle validation)
@@ -58,7 +58,7 @@ jobs:
         uses: actions/setup-java@v4
         with:
           java-version: ${{ env.JAVA_VERSION }}
-          distribution: 'eclipse-temurin'
+          distribution: 'temurin'
           cache: maven
 
       - name: Wait for PostgreSQL
@@ -102,7 +102,7 @@ jobs:
         uses: actions/setup-java@v4
         with:
           java-version: ${{ env.JAVA_VERSION }}
-          distribution: 'eclipse-temurin'
+          distribution: 'temurin'
           cache: maven
 
       - name: Build JAR package
@@ -129,7 +129,7 @@ jobs:
         uses: actions/setup-java@v4
         with:
           java-version: ${{ env.JAVA_VERSION }}
-          distribution: 'eclipse-temurin'
+          distribution: 'temurin'
           cache: maven
 
       - name: SonarQube Analysis
