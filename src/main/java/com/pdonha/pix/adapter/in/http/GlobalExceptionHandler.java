@@ -1,6 +1,9 @@
 package com.pdonha.pix.adapter.in.http;
 
 import com.pdonha.pix.domain.exception.AccountNotFoundException;
+import com.pdonha.pix.domain.exception.IdempotencyKeyFailedException;
+import com.pdonha.pix.domain.exception.IdempotencyKeyInvalidException;
+import com.pdonha.pix.domain.exception.IdempotencyKeyStillProcessingException;
 import com.pdonha.pix.domain.exception.PixKeyNotFoundException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -29,6 +32,33 @@ public class GlobalExceptionHandler {
         return buildErrorResponse(
                 HttpStatus.NOT_FOUND,
                 "ACCOUNT_NOT_FOUND",
+                ex.getMessage()
+        );
+    }
+
+    @ExceptionHandler(IdempotencyKeyInvalidException.class)
+    public ResponseEntity<Map<String, Object>> handleIdempotencyKeyInvalid(IdempotencyKeyInvalidException ex) {
+        return buildErrorResponse(
+                HttpStatus.BAD_REQUEST,
+                "IDEMPOTENCY_KEY_INVALID",
+                ex.getMessage()
+        );
+    }
+
+    @ExceptionHandler(IdempotencyKeyStillProcessingException.class)
+    public ResponseEntity<Map<String, Object>> handleIdempotencyKeyStillProcessing(IdempotencyKeyStillProcessingException ex) {
+        return buildErrorResponse(
+                HttpStatus.CONFLICT,
+                "IDEMPOTENCY_KEY_STILL_PROCESSING",
+                ex.getMessage()
+        );
+    }
+
+    @ExceptionHandler(IdempotencyKeyFailedException.class)
+    public ResponseEntity<Map<String, Object>> handleIdempotencyKeyFailed(IdempotencyKeyFailedException ex) {
+        return buildErrorResponse(
+                HttpStatus.UNPROCESSABLE_ENTITY,
+                "IDEMPOTENCY_KEY_FAILED",
                 ex.getMessage()
         );
     }

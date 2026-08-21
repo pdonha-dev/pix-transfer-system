@@ -68,4 +68,18 @@ public class CreatePixTransferService {
                 transfer.getCreatedAt()
         );
     }
+
+    public TransferResult getTransferResult(UUID transferId) {
+        Transfer transfer = transferRepository.findById(transferId);
+        if (transfer == null) {
+            throw new AccountNotFoundException("Transfer not found: " + transferId);
+        }
+
+        return new TransferResult(
+                transfer.getId(),
+                transfer.getStatus(),
+                transfer.getAmount(),
+                transfer.getCreatedAt()
+        );
+    }
 }

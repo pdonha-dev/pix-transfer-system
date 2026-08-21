@@ -2,7 +2,7 @@ package com.pdonha.pix.adapter.in.http;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.pdonha.pix.adapter.in.http.request.CreatePixTransferRequest;
-import com.pdonha.pix.application.service.CreatePixTransferService;
+import com.pdonha.pix.application.service.IdempotencyService;
 import com.pdonha.pix.domain.exception.PixKeyNotFoundException;
 import com.pdonha.pix.domain.model.Money;
 import com.pdonha.pix.domain.model.TransferStatus;
@@ -34,11 +34,12 @@ class CreatePixTransferControllerTest {
     private ObjectMapper objectMapper;
 
     @MockBean
-    private CreatePixTransferService createPixTransferService;
+    private IdempotencyService idempotencyService;
 
     @Test
     void shouldCreatePixTransferSuccessfully() throws Exception {
         UUID transferId = UUID.randomUUID();
+        String idempotencyKey = UUID.randomUUID().toString();
         CreatePixTransferRequest request = new CreatePixTransferRequest(
                 "12345678900",
                 "user@example.com",
@@ -52,10 +53,13 @@ class CreatePixTransferControllerTest {
                 LocalDateTime.now()
         );
 
-        Mockito.when(createPixTransferService.execute(Mockito.any()))
+        Mockito.when(idempotencyService.executeWithIdempotency(
+                Mockito.eq(idempotencyKey),
+                Mockito.any()))
                 .thenReturn(mockResult);
 
         mockMvc.perform(post("/api/v1/pix-transfers")
+                .header("Idempotency-Key", idempotencyKey)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isCreated())
@@ -66,6 +70,7 @@ class CreatePixTransferControllerTest {
 
     @Test
     void shouldReturn400WhenOriginPixKeyBlank() throws Exception {
+        String idempotencyKey = UUID.randomUUID().toString();
         CreatePixTransferRequest request = new CreatePixTransferRequest(
                 "",
                 "user@example.com",
@@ -73,6 +78,7 @@ class CreatePixTransferControllerTest {
         );
 
         mockMvc.perform(post("/api/v1/pix-transfers")
+                .header("Idempotency-Key", idempotencyKey)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isBadRequest());
@@ -80,16 +86,20 @@ class CreatePixTransferControllerTest {
 
     @Test
     void shouldReturn404WhenPixKeyNotFound() throws Exception {
+        String idempotencyKey = UUID.randomUUID().toString();
         CreatePixTransferRequest request = new CreatePixTransferRequest(
                 "nonexistent@example.com",
                 "user@example.com",
                 new BigDecimal("100.00")
         );
 
-        Mockito.when(createPixTransferService.execute(Mockito.any()))
+        Mockito.when(idempotencyService.executeWithIdempotency(
+                Mockito.eq(idempotencyKey),
+                Mockito.any()))
                 .thenThrow(new PixKeyNotFoundException("PIX key not found"));
 
         mockMvc.perform(post("/api/v1/pix-transfers")
+                .header("Idempotency-Key", idempotencyKey)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isNotFound())
@@ -98,6 +108,7 @@ class CreatePixTransferControllerTest {
 
     @Test
     void shouldReturn400WhenAmountNegative() throws Exception {
+        String idempotencyKey = UUID.randomUUID().toString();
         CreatePixTransferRequest request = new CreatePixTransferRequest(
                 "12345678900",
                 "user@example.com",
@@ -105,6 +116,7 @@ class CreatePixTransferControllerTest {
         );
 
         mockMvc.perform(post("/api/v1/pix-transfers")
+                .header("Idempotency-Key", idempotencyKey)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isBadRequest());

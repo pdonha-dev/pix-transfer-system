@@ -3,7 +3,7 @@ package com.pdonha.pix.application.dto.command;
 import java.math.BigDecimal;
 
 public class CreatePixTransferCommand {
-    private String originPixKey;      // CPF/Email/Phone/Random
+    private String originPixKey;
     private String destinationPixKey;
     private BigDecimal amount;
 
