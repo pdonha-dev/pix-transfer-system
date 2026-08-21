@@ -40,7 +40,7 @@ buildNumber.properties
 *.iml
 *.ipr
 *.iws
-out/
+/out/
 
 # Eclipse
 .classpath

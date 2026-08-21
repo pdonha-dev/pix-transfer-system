@@ -34,6 +34,6 @@ public class JpaIdempotencyKeyRepository implements IdempotencyKeyRepository {
     @Override
     public void save(IdempotencyKey idempotencyKey) {
         IdempotencyKeyJpaEntity entity = converter.toJpaEntity(idempotencyKey);
-        springRepo.save(entity);
+        springRepo.saveAndFlush(entity);
     }
 }

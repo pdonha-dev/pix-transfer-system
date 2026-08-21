@@ -2,6 +2,7 @@ package com.pdonha.pix.application.service;
 
 import com.pdonha.pix.application.dto.command.CreatePixTransferCommand;
 import com.pdonha.pix.application.dto.result.TransferResult;
+import com.pdonha.pix.domain.exception.IdempotencyKeyConflictException;
 import com.pdonha.pix.domain.exception.IdempotencyKeyFailedException;
 import com.pdonha.pix.domain.exception.IdempotencyKeyInvalidException;
 import com.pdonha.pix.domain.exception.IdempotencyKeyStillProcessingException;
@@ -10,11 +11,9 @@ import com.pdonha.pix.domain.model.IdempotencyKey;
 import com.pdonha.pix.domain.model.IdempotencyStatus;
 import com.pdonha.pix.domain.model.Money;
 import com.pdonha.pix.domain.model.TransferStatus;
-import com.pdonha.pix.domain.port.IdempotencyKeyRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
@@ -23,129 +22,126 @@ import java.time.LocalDateTime;
 import java.util.Optional;
 import java.util.UUID;
 
-import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.ArgumentMatchers.*;
-import static org.mockito.Mockito.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
 class IdempotencyServiceTest {
 
     @Mock
-    private IdempotencyKeyRepository idempotencyKeyRepository;
-
+    private IdempotencyRecordService recordService;
     @Mock
-    private CreatePixTransferService createPixTransferService;
+    private IdempotentTransferAttemptService attemptService;
+    @Mock
+    private CreatePixTransferService transferService;
 
-    @InjectMocks
-    private IdempotencyService idempotencyService;
-
-    private String idempotencyKey;
+    private IdempotencyService service;
     private CreatePixTransferCommand command;
-    private TransferResult transferResult;
+    private TransferResult result;
 
     @BeforeEach
     void setUp() {
-        idempotencyKey = UUID.randomUUID().toString();
-        command = new CreatePixTransferCommand("12345678900", "user@example.com", new BigDecimal("100.00"));
-        UUID transferId = UUID.randomUUID();
-        transferResult = new TransferResult(
-                transferId,
-                TransferStatus.PENDING,
-                new Money(new BigDecimal("100.00")),
-                LocalDateTime.now()
-        );
+        service = new IdempotencyService(recordService, attemptService, transferService);
+        command = new CreatePixTransferCommand(
+                "12345678900", "user@example.com", new BigDecimal("100.00"));
+        result = new TransferResult(
+                UUID.randomUUID(), TransferStatus.PENDING,
+                new Money(new BigDecimal("100.00")), LocalDateTime.now());
     }
 
     @Test
-    void shouldExecuteTransferWhenKeyDoesNotExist() {
-        when(idempotencyKeyRepository.findByKey(idempotencyKey)).thenReturn(Optional.empty());
-        when(createPixTransferService.execute(any())).thenReturn(transferResult);
+    void shouldReserveAndExecuteNewRequest() {
+        String key = "new-key";
+        when(recordService.findByKey(key)).thenReturn(Optional.empty());
+        when(attemptService.execute(eq(key), any(UUID.class), eq(command))).thenReturn(result);
 
-        TransferResult result = idempotencyService.executeWithIdempotency(idempotencyKey, command);
+        TransferResult actual = service.executeWithIdempotency(key, command);
 
-        assertNotNull(result);
-        assertEquals(transferResult.getTransferId(), result.getTransferId());
-        verify(idempotencyKeyRepository, times(2)).save(any());
-        verify(createPixTransferService, times(1)).execute(command);
+        assertEquals(result.getTransferId(), actual.getTransferId());
+        verify(recordService).reserve(any(IdempotencyKey.class));
+        verify(attemptService).execute(eq(key), any(UUID.class), eq(command));
     }
 
     @Test
-    void shouldReturnCachedResultWhenKeyAlreadyProcessedSuccessfully() {
-        IdempotencyKey successKey = new IdempotencyKey(idempotencyKey, transferResult.getTransferId(), IdempotencyStatus.SUCCESS);
-        when(idempotencyKeyRepository.findByKey(idempotencyKey)).thenReturn(Optional.of(successKey));
-        when(createPixTransferService.getTransferResult(transferResult.getTransferId())).thenReturn(transferResult);
+    void shouldReturnPriorResultForSameRequest() {
+        String key = "success-key";
+        IdempotencyKey record = record(key, IdempotencyStatus.SUCCESS,
+                IdempotencyService.requestHash(command), result.getTransferId());
+        when(recordService.findByKey(key)).thenReturn(Optional.of(record));
+        when(transferService.getTransferResult(result.getTransferId())).thenReturn(result);
 
-        TransferResult result = idempotencyService.executeWithIdempotency(idempotencyKey, command);
+        TransferResult actual = service.executeWithIdempotency(key, command);
 
-        assertNotNull(result);
-        assertEquals(transferResult.getTransferId(), result.getTransferId());
-        verify(createPixTransferService, never()).execute(any());
-        verify(createPixTransferService, times(1)).getTransferResult(transferResult.getTransferId());
+        assertEquals(result.getTransferId(), actual.getTransferId());
+        verify(attemptService, never()).execute(any(), any(), any());
     }
 
     @Test
-    void shouldThrowExceptionWhenKeyStillProcessing() {
-        IdempotencyKey pendingKey = new IdempotencyKey(idempotencyKey, UUID.randomUUID(), IdempotencyStatus.PENDING);
-        when(idempotencyKeyRepository.findByKey(idempotencyKey)).thenReturn(Optional.of(pendingKey));
+    void shouldReplayLegacySuccessfulRecordWithoutPayloadFingerprint() {
+        String key = "legacy-key";
+        IdempotencyKey record = record(key, IdempotencyStatus.SUCCESS,
+                "legacy:" + UUID.randomUUID(), result.getTransferId());
+        when(recordService.findByKey(key)).thenReturn(Optional.of(record));
+        when(transferService.getTransferResult(result.getTransferId())).thenReturn(result);
 
-        assertThrows(IdempotencyKeyStillProcessingException.class, () ->
-                idempotencyService.executeWithIdempotency(idempotencyKey, command)
-        );
+        TransferResult actual = service.executeWithIdempotency(key, command);
 
-        verify(createPixTransferService, never()).execute(any());
+        assertEquals(result.getTransferId(), actual.getTransferId());
     }
 
     @Test
-    void shouldThrowExceptionWhenKeyPreviouslyFailed() {
-        IdempotencyKey failedKey = new IdempotencyKey(idempotencyKey, UUID.randomUUID(), IdempotencyStatus.FAILED);
-        when(idempotencyKeyRepository.findByKey(idempotencyKey)).thenReturn(Optional.of(failedKey));
+    void shouldRejectSameKeyForDifferentRequest() {
+        String key = "reused-key";
+        when(recordService.findByKey(key)).thenReturn(Optional.of(
+                record(key, IdempotencyStatus.SUCCESS, "different-hash", result.getTransferId())));
 
-        assertThrows(IdempotencyKeyFailedException.class, () ->
-                idempotencyService.executeWithIdempotency(idempotencyKey, command)
-        );
-
-        verify(createPixTransferService, never()).execute(any());
+        assertThrows(IdempotencyKeyConflictException.class,
+                () -> service.executeWithIdempotency(key, command));
     }
 
     @Test
-    void shouldThrowExceptionWhenIdempotencyKeyIsNull() {
-        assertThrows(IdempotencyKeyInvalidException.class, () ->
-                idempotencyService.executeWithIdempotency(null, command)
-        );
+    void shouldRejectPendingAndFailedRequests() {
+        String hash = IdempotencyService.requestHash(command);
+        when(recordService.findByKey("pending")).thenReturn(Optional.of(
+                record("pending", IdempotencyStatus.PENDING, hash, UUID.randomUUID())));
+        when(recordService.findByKey("failed")).thenReturn(Optional.of(
+                record("failed", IdempotencyStatus.FAILED, hash, UUID.randomUUID())));
 
-        verify(idempotencyKeyRepository, never()).findByKey(any());
-        verify(createPixTransferService, never()).execute(any());
+        assertThrows(IdempotencyKeyStillProcessingException.class,
+                () -> service.executeWithIdempotency("pending", command));
+        assertThrows(IdempotencyKeyFailedException.class,
+                () -> service.executeWithIdempotency("failed", command));
     }
 
     @Test
-    void shouldThrowExceptionWhenIdempotencyKeyIsBlank() {
-        assertThrows(IdempotencyKeyInvalidException.class, () ->
-                idempotencyService.executeWithIdempotency("   ", command)
-        );
-
-        verify(idempotencyKeyRepository, never()).findByKey(any());
-        verify(createPixTransferService, never()).execute(any());
+    void shouldRejectBlankKey() {
+        assertThrows(IdempotencyKeyInvalidException.class,
+                () -> service.executeWithIdempotency(" ", command));
+        verify(recordService, never()).findByKey(any());
     }
 
     @Test
-    void shouldMarkKeyAsFailedWhenExecutionThrowsException() {
-        when(idempotencyKeyRepository.findByKey(idempotencyKey)).thenReturn(Optional.empty());
-        when(createPixTransferService.execute(any())).thenThrow(new PixKeyNotFoundException("PIX key not found"));
+    void shouldMarkReservationFailedWhenTransferFails() {
+        String key = "failed-transfer";
+        when(recordService.findByKey(key)).thenReturn(Optional.empty());
+        when(attemptService.execute(eq(key), any(UUID.class), eq(command)))
+                .thenThrow(new PixKeyNotFoundException("PIX key not found"));
 
-        assertThrows(PixKeyNotFoundException.class, () ->
-                idempotencyService.executeWithIdempotency(idempotencyKey, command)
-        );
+        assertThrows(PixKeyNotFoundException.class,
+                () -> service.executeWithIdempotency(key, command));
 
-        verify(idempotencyKeyRepository, times(2)).save(any());
+        verify(recordService).markFailed(key);
     }
 
-    @Test
-    void shouldMarkKeyAsSuccessAfterSuccessfulExecution() {
-        when(idempotencyKeyRepository.findByKey(idempotencyKey)).thenReturn(Optional.empty());
-        when(createPixTransferService.execute(any())).thenReturn(transferResult);
-
-        idempotencyService.executeWithIdempotency(idempotencyKey, command);
-
-        verify(idempotencyKeyRepository, times(2)).save(any());
+    private IdempotencyKey record(String key, IdempotencyStatus status,
+                                  String hash, UUID transferId) {
+        return IdempotencyKey.rehydrate(
+                UUID.randomUUID(), key, transferId, hash, status,
+                LocalDateTime.now(), LocalDateTime.now());
     }
 }

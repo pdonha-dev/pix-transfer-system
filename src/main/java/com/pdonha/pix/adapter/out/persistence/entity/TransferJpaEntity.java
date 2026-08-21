@@ -1,12 +1,16 @@
 package com.pdonha.pix.adapter.out.persistence.entity;
 
 import jakarta.persistence.*;
+import org.springframework.data.annotation.CreatedBy;
+import org.springframework.data.annotation.LastModifiedBy;
+import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.UUID;
 
 @Entity
 @Table(name = "transfers")
+@EntityListeners(AuditingEntityListener.class)
 public class TransferJpaEntity {
     
     @Id
@@ -34,9 +38,11 @@ public class TransferJpaEntity {
     private LocalDateTime updatedAt;
     
     @Column(name = "created_by")
+    @CreatedBy
     private String createdBy;
     
     @Column(name = "last_modified_by")
+    @LastModifiedBy
     private String lastModifiedBy;
     
     @Column(name = "deleted_at")

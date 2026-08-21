@@ -22,19 +22,26 @@ public class Account {
     private boolean isActive;
     private final LocalDateTime createdAt;
     private LocalDateTime updatedAt;
-    private final List<DomainEvent> events;
+    private final List<DomainEvent> pendingEvents;
+    private final Long version;
 
     public Account(UUID id, UUID customerId, Money initialBalance, Money dailyLimit) {
+        this(id, customerId, initialBalance, dailyLimit, new Money(BigDecimal.ZERO), true,
+                LocalDateTime.now(), LocalDateTime.now(), null);
+    }
+
+    private Account(UUID id, UUID customerId, Money balance, Money dailyLimit, Money dailyUsed,
+                    boolean active, LocalDateTime createdAt, LocalDateTime updatedAt, Long version) {
         if(id == null) {
             throw new InvalidAccountException("Account ID cannot be null");
         }
         if(customerId == null) {
             throw new InvalidAccountException("Customer ID cannot be null");
         }
-        if(initialBalance == null) {
+        if(balance == null) {
             throw new InvalidAccountException("Initial balance cannot be null");
         }
-        if(!initialBalance.isGreaterThanOrEqual(new Money(BigDecimal.ZERO))) {
+        if(!balance.isGreaterThanOrEqual(new Money(BigDecimal.ZERO))) {
             throw new InvalidAccountException("Initial balance cannot be negative");
         }
         if(dailyLimit == null) {
@@ -44,15 +51,25 @@ public class Account {
             throw new InvalidAccountException("Daily limit must be at least 1.00");
         }
 
+        if (dailyUsed == null || createdAt == null || updatedAt == null) {
+            throw new InvalidAccountException("Persisted account state cannot contain null fields");
+        }
         this.id = id;
         this.customerId = customerId;
-        this.balance = initialBalance;
+        this.balance = balance;
         this.dailyLimit = dailyLimit;
-        this.dailyUsed = new Money(BigDecimal.ZERO);
-        this.isActive = true;
-        this.createdAt = LocalDateTime.now();
-        this.updatedAt = LocalDateTime.now();
-        this.events = new ArrayList<>();
+        this.dailyUsed = dailyUsed;
+        this.isActive = active;
+        this.createdAt = createdAt;
+        this.updatedAt = updatedAt;
+        this.pendingEvents = new ArrayList<>();
+        this.version = version;
+    }
+
+    public static Account rehydrate(UUID id, UUID customerId, Money balance, Money dailyLimit,
+                                    Money dailyUsed, boolean active, LocalDateTime createdAt,
+                                    LocalDateTime updatedAt, Long version) {
+        return new Account(id, customerId, balance, dailyLimit, dailyUsed, active, createdAt, updatedAt, version);
     }
 
     public UUID getId() {
@@ -87,16 +104,25 @@ public class Account {
         return updatedAt;
     }
 
-    public List<DomainEvent> getEvents() {
-        return new ArrayList<>(events);
+    public Long getVersion() {
+        return version;
     }
 
-    public void addEvent(DomainEvent event) {
-        this.events.add(event);
+    public List<DomainEvent> getPendingEvents() {
+        return List.copyOf(pendingEvents);
     }
 
-    public void clearEvents() {
-        this.events.clear();
+    public void addPendingEvent(DomainEvent event) {
+        if (event == null) {
+            throw new InvalidAccountException("Domain event cannot be null");
+        }
+        pendingEvents.add(event);
+    }
+
+    public List<DomainEvent> drainPendingEvents() {
+        List<DomainEvent> drained = List.copyOf(pendingEvents);
+        pendingEvents.clear();
+        return drained;
     }
 
     public void deposit(Money amount) {

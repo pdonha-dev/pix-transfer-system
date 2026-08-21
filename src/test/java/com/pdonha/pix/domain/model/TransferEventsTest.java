@@ -1,64 +1,54 @@
 package com.pdonha.pix.domain.model;
 
+import com.pdonha.pix.domain.event.TransferCreatedEvent;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
+import java.util.List;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-@DisplayName("TransferEventsTest")
+@DisplayName("Transfer pending events")
 class TransferEventsTest {
 
     @Test
-    @DisplayName("should have empty events on creation")
-    void shouldHaveEmptyEventsOnCreation() {
-        UUID transferId = UUID.randomUUID();
-        UUID payerAccountId = UUID.randomUUID();
-        UUID payeeAccountId = UUID.randomUUID();
-        Money amount = new Money(BigDecimal.valueOf(100));
+    void shouldEmitCreatedEventForNewTransfer() {
+        Transfer transfer = transfer();
 
-        Transfer transfer = new Transfer(transferId, payerAccountId, payeeAccountId, amount);
-
-        assertTrue(transfer.getEvents().isEmpty());
+        assertEquals(1, transfer.getPendingEvents().size());
+        assertEquals("TransferCreated", transfer.getPendingEvents().getFirst().getEventType());
     }
 
     @Test
-    @DisplayName("should collect events via addEvent")
-    void shouldCollectEventsViaAddEvent() {
-        UUID transferId = UUID.randomUUID();
-        UUID payerAccountId = UUID.randomUUID();
-        UUID payeeAccountId = UUID.randomUUID();
-        Money amount = new Money(BigDecimal.valueOf(100));
+    void shouldDrainPendingEventsOnce() {
+        Transfer transfer = transfer();
 
-        Transfer transfer = new Transfer(transferId, payerAccountId, payeeAccountId, amount);
-        com.pdonha.pix.domain.event.TransferCreatedEvent event = 
-            new com.pdonha.pix.domain.event.TransferCreatedEvent(transferId, payerAccountId, payeeAccountId, amount, "user@example.com");
+        List<com.pdonha.pix.domain.event.DomainEvent> drained = transfer.drainPendingEvents();
 
-        transfer.addEvent(event);
-
-        assertEquals(1, transfer.getEvents().size());
-        assertEquals("TransferCreated", transfer.getEvents().get(0).getEventType());
+        assertEquals(1, drained.size());
+        assertTrue(transfer.getPendingEvents().isEmpty());
+        assertTrue(transfer.drainPendingEvents().isEmpty());
     }
 
     @Test
-    @DisplayName("should clear events after publishing")
-    void shouldClearEventsAfterPublishing() {
-        UUID transferId = UUID.randomUUID();
-        UUID payerAccountId = UUID.randomUUID();
-        UUID payeeAccountId = UUID.randomUUID();
-        Money amount = new Money(BigDecimal.valueOf(100));
+    void shouldAcceptAdditionalPendingEvent() {
+        Transfer transfer = transfer();
+        transfer.addPendingEvent(new TransferCreatedEvent(
+                transfer.getId(), transfer.getPayerAccountId(), transfer.getPayeeAccountId(),
+                transfer.getAmount(), "operator"));
 
-        Transfer transfer = new Transfer(transferId, payerAccountId, payeeAccountId, amount);
-        com.pdonha.pix.domain.event.TransferCreatedEvent event = 
-            new com.pdonha.pix.domain.event.TransferCreatedEvent(transferId, payerAccountId, payeeAccountId, amount, "user@example.com");
+        assertEquals(2, transfer.getPendingEvents().size());
+    }
 
-        transfer.addEvent(event);
-        assertEquals(1, transfer.getEvents().size());
-
-        transfer.clearEvents();
-        assertEquals(0, transfer.getEvents().size());
+    private Transfer transfer() {
+        return new Transfer(
+                UUID.randomUUID(),
+                UUID.randomUUID(),
+                UUID.randomUUID(),
+                new Money(new BigDecimal("100.00"))
+        );
     }
 }

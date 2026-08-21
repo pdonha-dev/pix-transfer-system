@@ -1,109 +1,67 @@
 package com.pdonha.pix.domain.model;
 
 import com.pdonha.pix.domain.exception.IdempotencyKeyInvalidException;
+import com.pdonha.pix.domain.exception.InvalidIdempotencyKeyException;
 import org.junit.jupiter.api.Test;
 
+import java.time.LocalDateTime;
 import java.util.UUID;
 
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 class IdempotencyKeyTest {
 
     @Test
-    void shouldCreateIdempotencyKeyWithValidData() {
-        String key = "test-key-123";
+    void shouldCreatePendingIdempotencyKeyWithValidData() {
         UUID transferId = UUID.randomUUID();
-        IdempotencyStatus status = IdempotencyStatus.PENDING;
 
-        IdempotencyKey idempotencyKey = new IdempotencyKey(key, transferId, status);
+        IdempotencyKey key = new IdempotencyKey("test-key-123", transferId, "request-hash");
 
-        assertNotNull(idempotencyKey.getId());
-        assertEquals(key, idempotencyKey.getKey());
-        assertEquals(transferId, idempotencyKey.getTransferId());
-        assertEquals(status, idempotencyKey.getStatus());
-        assertNotNull(idempotencyKey.getCreatedAt());
-        assertNotNull(idempotencyKey.getUpdatedAt());
+        assertNotNull(key.getId());
+        assertEquals(transferId, key.getTransferId());
+        assertEquals("request-hash", key.getRequestHash());
+        assertEquals(IdempotencyStatus.PENDING, key.getStatus());
     }
 
     @Test
-    void shouldThrowExceptionWhenKeyIsNull() {
+    void shouldRejectInvalidCreationData() {
         UUID transferId = UUID.randomUUID();
-        IdempotencyStatus status = IdempotencyStatus.PENDING;
 
-        assertThrows(IdempotencyKeyInvalidException.class, () ->
-                new IdempotencyKey(null, transferId, status)
-        );
+        assertThrows(IdempotencyKeyInvalidException.class,
+                () -> new IdempotencyKey(null, transferId, "hash"));
+        assertThrows(IdempotencyKeyInvalidException.class,
+                () -> new IdempotencyKey(" ", transferId, "hash"));
+        assertThrows(InvalidIdempotencyKeyException.class,
+                () -> new IdempotencyKey("key", null, "hash"));
+        assertThrows(InvalidIdempotencyKeyException.class,
+                () -> new IdempotencyKey("key", transferId, " "));
     }
 
     @Test
-    void shouldThrowExceptionWhenKeyIsBlank() {
-        UUID transferId = UUID.randomUUID();
-        IdempotencyStatus status = IdempotencyStatus.PENDING;
+    void shouldTransitionOnlyFromPending() {
+        IdempotencyKey key = new IdempotencyKey("key", UUID.randomUUID(), "hash");
 
-        assertThrows(IdempotencyKeyInvalidException.class, () ->
-                new IdempotencyKey("   ", transferId, status)
-        );
+        key.markSuccessful();
+
+        assertEquals(IdempotencyStatus.SUCCESS, key.getStatus());
+        assertThrows(InvalidIdempotencyKeyException.class, key::markFailed);
     }
 
     @Test
-    void shouldThrowExceptionWhenTransferIdIsNull() {
-        String key = "test-key-123";
-        IdempotencyStatus status = IdempotencyStatus.PENDING;
-
-        assertThrows(RuntimeException.class, () ->
-                new IdempotencyKey(key, null, status)
-        );
-    }
-
-    @Test
-    void shouldThrowExceptionWhenStatusIsNull() {
-        String key = "test-key-123";
+    void shouldRehydratePersistedStateWithoutLosingIdentity() {
+        UUID id = UUID.randomUUID();
         UUID transferId = UUID.randomUUID();
+        LocalDateTime createdAt = LocalDateTime.now().minusMinutes(1);
+        LocalDateTime updatedAt = LocalDateTime.now();
 
-        assertThrows(RuntimeException.class, () ->
-                new IdempotencyKey(key, transferId, null)
-        );
-    }
+        IdempotencyKey key = IdempotencyKey.rehydrate(
+                id, "key", transferId, "hash", IdempotencyStatus.FAILED, createdAt, updatedAt);
 
-    @Test
-    void shouldUpdateStatusSuccessfully() {
-        String key = "test-key-456";
-        UUID transferId = UUID.randomUUID();
-        IdempotencyKey idempotencyKey = new IdempotencyKey(key, transferId, IdempotencyStatus.PENDING);
-
-        idempotencyKey.setStatus(IdempotencyStatus.SUCCESS);
-
-        assertEquals(IdempotencyStatus.SUCCESS, idempotencyKey.getStatus());
-    }
-
-    @Test
-    void shouldThrowExceptionWhenSettingStatusToNull() {
-        String key = "test-key-789";
-        UUID transferId = UUID.randomUUID();
-        IdempotencyKey idempotencyKey = new IdempotencyKey(key, transferId, IdempotencyStatus.PENDING);
-
-        assertThrows(RuntimeException.class, () ->
-                idempotencyKey.setStatus(null)
-        );
-    }
-
-    @Test
-    void shouldConsiderEqualIfSameId() {
-        String key = "test-key-equal";
-        UUID transferId = UUID.randomUUID();
-        IdempotencyKey key1 = new IdempotencyKey(key, transferId, IdempotencyStatus.PENDING);
-        IdempotencyKey key2 = key1;
-
-        assertEquals(key1, key2);
-    }
-
-    @Test
-    void shouldNotConsiderEqualIfDifferentId() {
-        String key = "test-key-diff";
-        UUID transferId = UUID.randomUUID();
-        IdempotencyKey key1 = new IdempotencyKey(key, transferId, IdempotencyStatus.PENDING);
-        IdempotencyKey key2 = new IdempotencyKey(key, transferId, IdempotencyStatus.SUCCESS);
-
-        assertNotEquals(key1, key2);
+        assertEquals(id, key.getId());
+        assertEquals(createdAt, key.getCreatedAt());
+        assertEquals(updatedAt, key.getUpdatedAt());
+        assertEquals(IdempotencyStatus.FAILED, key.getStatus());
     }
 }

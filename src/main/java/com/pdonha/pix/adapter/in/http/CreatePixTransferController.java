@@ -5,6 +5,7 @@ import com.pdonha.pix.adapter.in.http.response.CreatePixTransferResponse;
 import com.pdonha.pix.application.dto.command.CreatePixTransferCommand;
 import com.pdonha.pix.application.dto.result.TransferResult;
 import com.pdonha.pix.application.service.IdempotencyService;
+import com.pdonha.pix.domain.exception.IdempotencyKeyInvalidException;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -30,7 +31,7 @@ public class CreatePixTransferController {
     @PostMapping
     @Operation(
         summary = "Create a new PIX transfer",
-        description = "Initiates a new PIX transfer between two accounts identified by PIX keys (CPF, Email, Phone, or Random UUID). Transfer starts in PENDING status and is processed asynchronously. Idempotency-Key header prevents duplicate transfers if retransmitted."
+        description = "Records a PIX transfer between accounts identified by PIX keys. Transfer starts in PENDING status. Idempotency-Key prevents duplicate balance movements and rejects reuse with a different payload."
     )
     @ApiResponses({
         @ApiResponse(
@@ -60,7 +61,7 @@ public class CreatePixTransferController {
             @Valid @RequestBody CreatePixTransferRequest request) {
 
         if (idempotencyKey == null || idempotencyKey.isBlank()) {
-            return ResponseEntity.badRequest().build();
+            throw new IdempotencyKeyInvalidException("Idempotency key cannot be blank");
         }
 
         CreatePixTransferCommand command = new CreatePixTransferCommand(

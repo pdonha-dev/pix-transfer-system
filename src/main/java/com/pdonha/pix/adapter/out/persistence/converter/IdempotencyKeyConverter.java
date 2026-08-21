@@ -13,11 +13,15 @@ public class IdempotencyKeyConverter {
             return null;
         }
 
-        IdempotencyStatus status = IdempotencyStatus.valueOf(entity.getStatus().name());
-        IdempotencyKey domain = new IdempotencyKey(entity.getKey(), entity.getTransferId(), status);
-
-        // Reflect fields (since constructor creates new timestamps)
-        return domain;
+        return IdempotencyKey.rehydrate(
+                entity.getId(),
+                entity.getKey(),
+                entity.getTransferId(),
+                entity.getRequestHash(),
+                IdempotencyStatus.valueOf(entity.getStatus().name()),
+                entity.getCreatedAt(),
+                entity.getUpdatedAt()
+        );
     }
 
     public IdempotencyKeyJpaEntity toJpaEntity(IdempotencyKey domain) {
@@ -29,6 +33,7 @@ public class IdempotencyKeyConverter {
         entity.setId(domain.getId());
         entity.setKey(domain.getKey());
         entity.setTransferId(domain.getTransferId());
+        entity.setRequestHash(domain.getRequestHash());
         entity.setStatus(IdempotencyKeyJpaEntity.IdempotencyStatusJpa.valueOf(domain.getStatus().name()));
         entity.setCreatedAt(domain.getCreatedAt());
         entity.setUpdatedAt(domain.getUpdatedAt());

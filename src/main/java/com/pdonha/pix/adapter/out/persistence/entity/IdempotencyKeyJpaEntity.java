@@ -17,6 +17,9 @@ public class IdempotencyKeyJpaEntity {
     @Column(name = "transfer_id", nullable = false)
     private UUID transferId;
 
+    @Column(name = "request_hash", nullable = false, length = 64)
+    private String requestHash;
+
     @Enumerated(EnumType.STRING)
     @Column(name = "status", nullable = false)
     private IdempotencyStatusJpa status;
@@ -51,6 +54,14 @@ public class IdempotencyKeyJpaEntity {
 
     public void setTransferId(UUID transferId) {
         this.transferId = transferId;
+    }
+
+    public String getRequestHash() {
+        return requestHash;
+    }
+
+    public void setRequestHash(String requestHash) {
+        this.requestHash = requestHash;
     }
 
     public IdempotencyStatusJpa getStatus() {

@@ -3,6 +3,7 @@ package com.pdonha.pix.application.service;
 import com.pdonha.pix.adapter.out.persistence.repository.JpaAccountRepository;
 import com.pdonha.pix.adapter.out.persistence.repository.JpaPixKeyRepository;
 import com.pdonha.pix.adapter.out.persistence.repository.JpaTransferRepository;
+import com.pdonha.pix.adapter.out.persistence.repository.JpaEventStoreRepository;
 import com.pdonha.pix.application.dto.command.CreatePixTransferCommand;
 import com.pdonha.pix.domain.exception.AccountNotFoundException;
 import com.pdonha.pix.domain.exception.PixKeyNotFoundException;
@@ -39,6 +40,9 @@ class CreatePixTransferServiceIT {
 
     @Autowired
     private JpaTransferRepository transferRepository;
+
+    @Autowired
+    private JpaEventStoreRepository eventStoreRepository;
 
     @Autowired
     private EntityManager entityManager;
@@ -97,6 +101,7 @@ class CreatePixTransferServiceIT {
 
         assertEquals(0, new BigDecimal("900.00").compareTo(accountAAfter.getBalance().getAmount()));
         assertEquals(0, new BigDecimal("100.00").compareTo(accountBAfter.getBalance().getAmount()));
+        assertEquals(1, eventStoreRepository.findByAggregateId(result.getTransferId()).size());
     }
 
     @Test

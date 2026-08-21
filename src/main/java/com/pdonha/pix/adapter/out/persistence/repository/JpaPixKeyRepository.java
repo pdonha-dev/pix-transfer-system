@@ -37,6 +37,6 @@ public class JpaPixKeyRepository implements PixKeyRepository {
     @Override
     public void save(PixKey pixKey) {
         PixKeyJpaEntity entity = converter.toJpaEntity(pixKey);
-        springRepo.save(entity);
+        springRepo.saveAndFlush(entity);
     }
 }

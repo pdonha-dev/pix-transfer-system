@@ -1,5 +1,6 @@
 package com.pdonha.pix.domain.model;
 
+import com.pdonha.pix.domain.event.AccountCreatedEvent;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -9,56 +10,32 @@ import java.util.UUID;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-@DisplayName("AccountEventsTest")
+@DisplayName("Account pending events")
 class AccountEventsTest {
 
     @Test
-    @DisplayName("should publish AccountCreated event on initialization")
-    void shouldHaveEventListOnCreation() {
-        UUID accountId = UUID.randomUUID();
-        UUID customerId = UUID.randomUUID();
-        Money initialBalance = new Money(BigDecimal.valueOf(1000));
-        Money dailyLimit = new Money(BigDecimal.valueOf(5000));
-
-        Account account = new Account(accountId, customerId, initialBalance, dailyLimit);
-
-        assertTrue(account.getEvents().isEmpty());
+    void shouldStartWithoutPendingEvents() {
+        assertTrue(account().getPendingEvents().isEmpty());
     }
 
     @Test
-    @DisplayName("should collect events via addEvent")
-    void shouldCollectEventsViaAddEvent() {
-        UUID accountId = UUID.randomUUID();
-        UUID customerId = UUID.randomUUID();
-        Money initialBalance = new Money(BigDecimal.valueOf(1000));
-        Money dailyLimit = new Money(BigDecimal.valueOf(5000));
+    void shouldCollectAndDrainPendingEvents() {
+        Account account = account();
+        account.addPendingEvent(new AccountCreatedEvent(
+                account.getId(), account.getCustomerId(), account.getBalance(),
+                account.getDailyLimit(), "operator"));
 
-        Account account = new Account(accountId, customerId, initialBalance, dailyLimit);
-        com.pdonha.pix.domain.event.AccountCreatedEvent event = 
-            new com.pdonha.pix.domain.event.AccountCreatedEvent(accountId, customerId, initialBalance, dailyLimit, "user@example.com");
-
-        account.addEvent(event);
-
-        assertEquals(1, account.getEvents().size());
-        assertEquals("AccountCreated", account.getEvents().get(0).getEventType());
+        assertEquals(1, account.getPendingEvents().size());
+        assertEquals(1, account.drainPendingEvents().size());
+        assertTrue(account.getPendingEvents().isEmpty());
     }
 
-    @Test
-    @DisplayName("should clear events after publishing")
-    void shouldClearEventsAfterPublishing() {
-        UUID accountId = UUID.randomUUID();
-        UUID customerId = UUID.randomUUID();
-        Money initialBalance = new Money(BigDecimal.valueOf(1000));
-        Money dailyLimit = new Money(BigDecimal.valueOf(5000));
-
-        Account account = new Account(accountId, customerId, initialBalance, dailyLimit);
-        com.pdonha.pix.domain.event.AccountCreatedEvent event = 
-            new com.pdonha.pix.domain.event.AccountCreatedEvent(accountId, customerId, initialBalance, dailyLimit, "user@example.com");
-
-        account.addEvent(event);
-        assertEquals(1, account.getEvents().size());
-
-        account.clearEvents();
-        assertEquals(0, account.getEvents().size());
+    private Account account() {
+        return new Account(
+                UUID.randomUUID(),
+                UUID.randomUUID(),
+                new Money(new BigDecimal("1000.00")),
+                new Money(new BigDecimal("5000.00"))
+        );
     }
 }

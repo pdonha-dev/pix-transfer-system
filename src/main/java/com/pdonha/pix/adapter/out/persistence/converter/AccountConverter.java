@@ -13,11 +13,16 @@ public class AccountConverter {
             return null;
         }
         
-        return new Account(
+        return Account.rehydrate(
             entity.getId(),
             entity.getCustomerId(),
             new Money(entity.getBalance()),
-            new Money(entity.getDailyLimit())
+            new Money(entity.getDailyLimit()),
+            new Money(entity.getDailyUsed()),
+            entity.isActive(),
+            entity.getCreatedAt(),
+            entity.getUpdatedAt(),
+            entity.getVersion()
         );
     }
     
@@ -35,6 +40,7 @@ public class AccountConverter {
         entity.setActive(domain.isActive());
         entity.setCreatedAt(domain.getCreatedAt());
         entity.setUpdatedAt(domain.getUpdatedAt());
+        entity.setVersion(domain.getVersion());
         
         return entity;
     }

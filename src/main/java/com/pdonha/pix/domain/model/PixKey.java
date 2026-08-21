@@ -16,6 +16,11 @@ public class PixKey {
     private LocalDateTime updatedAt;
 
     public PixKey(UUID id, UUID accountId, PixKeyType type, String value) {
+        this(id, accountId, type, value, true, LocalDateTime.now(), LocalDateTime.now());
+    }
+
+    private PixKey(UUID id, UUID accountId, PixKeyType type, String value, boolean active,
+                   LocalDateTime createdAt, LocalDateTime updatedAt) {
         if (id == null) {
             throw new InvalidPixKeyException("Pix key ID cannot be null");
         }
@@ -28,14 +33,22 @@ public class PixKey {
         if (!type.isValid(value)) {
             throw new PixKeyInvalidException("Pix key value does not match the specified type");
         }
+        if (createdAt == null || updatedAt == null) {
+            throw new InvalidPixKeyException("Pix key timestamps cannot be null");
+        }
 
         this.id = id;
         this.accountId = accountId;
         this.type = type;
         this.value = value;
-        this.active = true;
-        this.createdAt = LocalDateTime.now();
-        this.updatedAt = LocalDateTime.now();
+        this.active = active;
+        this.createdAt = createdAt;
+        this.updatedAt = updatedAt;
+    }
+
+    public static PixKey rehydrate(UUID id, UUID accountId, PixKeyType type, String value,
+                                   boolean active, LocalDateTime createdAt, LocalDateTime updatedAt) {
+        return new PixKey(id, accountId, type, value, active, createdAt, updatedAt);
     }
 
     public UUID getId() {

@@ -17,6 +17,13 @@ public class EventStore {
 
     public EventStore(UUID id, UUID eventId, String eventType, UUID aggregateId, 
                      String aggregateType, int aggregateVersion, String eventData) {
+        this(id, eventId, eventType, aggregateId, aggregateType, aggregateVersion,
+                eventData, LocalDateTime.now());
+    }
+
+    private EventStore(UUID id, UUID eventId, String eventType, UUID aggregateId,
+                       String aggregateType, int aggregateVersion, String eventData,
+                       LocalDateTime storedAt) {
         if (id == null) {
             throw new InvalidEventStoreException("Event store ID cannot be null");
         }
@@ -35,6 +42,12 @@ public class EventStore {
         if (eventData == null || eventData.isBlank()) {
             throw new InvalidEventStoreException("Event data cannot be null or blank");
         }
+        if (aggregateVersion < 1) {
+            throw new InvalidEventStoreException("Aggregate version must be positive");
+        }
+        if (storedAt == null) {
+            throw new InvalidEventStoreException("Stored timestamp cannot be null");
+        }
 
         this.id = id;
         this.eventId = eventId;
@@ -43,7 +56,14 @@ public class EventStore {
         this.aggregateType = aggregateType;
         this.aggregateVersion = aggregateVersion;
         this.eventData = eventData;
-        this.storedAt = LocalDateTime.now();
+        this.storedAt = storedAt;
+    }
+
+    public static EventStore rehydrate(UUID id, UUID eventId, String eventType, UUID aggregateId,
+                                       String aggregateType, int aggregateVersion, String eventData,
+                                       LocalDateTime storedAt) {
+        return new EventStore(id, eventId, eventType, aggregateId, aggregateType,
+                aggregateVersion, eventData, storedAt);
     }
 
     public UUID getId() {

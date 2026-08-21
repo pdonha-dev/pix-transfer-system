@@ -103,7 +103,9 @@ class CreatePixTransferControllerTest {
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isNotFound())
-                .andExpect(jsonPath("$.error_code").value("PIX_KEY_NOT_FOUND"));
+                .andExpect(jsonPath("$.error_code").value("PIX_KEY_NOT_FOUND"))
+                .andExpect(jsonPath("$.title").value("PIX key not found"))
+                .andExpect(jsonPath("$.detail").value("PIX key not found"));
     }
 
     @Test

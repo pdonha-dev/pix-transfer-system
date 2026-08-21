@@ -3,9 +3,9 @@ package com.pdonha.pix.application.dto.command;
 import java.math.BigDecimal;
 
 public class CreatePixTransferCommand {
-    private String originPixKey;
-    private String destinationPixKey;
-    private BigDecimal amount;
+    private final String originPixKey;
+    private final String destinationPixKey;
+    private final BigDecimal amount;
 
     public CreatePixTransferCommand(String originPixKey, String destinationPixKey, BigDecimal amount) {
         this.originPixKey = originPixKey;

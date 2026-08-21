@@ -14,14 +14,16 @@ public class TransferConverter {
             return null;
         }
         
-        Transfer transfer = new Transfer(
+        return Transfer.rehydrate(
             entity.getId(),
             entity.getPayerAccountId(),
             entity.getPayeeAccountId(),
-            new Money(entity.getAmount())
+            new Money(entity.getAmount()),
+            TransferStatus.valueOf(entity.getStatus()),
+            entity.getCreatedAt(),
+            entity.getUpdatedAt(),
+            entity.getVersion()
         );
-
-        return transfer;
     }
     
     public TransferJpaEntity toJpaEntity(Transfer domain) {
@@ -37,8 +39,8 @@ public class TransferConverter {
         entity.setStatus(domain.getStatus().name());
         entity.setCreatedAt(domain.getCreatedAt());
         entity.setUpdatedAt(domain.getUpdatedAt());
+        entity.setVersion(domain.getVersion());
         
         return entity;
     }
 }
-

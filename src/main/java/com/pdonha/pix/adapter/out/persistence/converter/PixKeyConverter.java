@@ -13,11 +13,14 @@ public class PixKeyConverter {
             return null;
         }
         
-        return new PixKey(
+        return PixKey.rehydrate(
             entity.getId(),
             entity.getAccountId(),
             PixKeyType.valueOf(entity.getKeyType()),
-            entity.getKeyValue()
+            entity.getKeyValue(),
+            entity.isActive(),
+            entity.getCreatedAt(),
+            entity.getUpdatedAt()
         );
     }
     

@@ -1,256 +1,274 @@
 # PIX Transfer System
 
-Plataforma backend para simular transferências PIX com práticas usadas em sistemas financeiros: consistência, idempotência, segurança, auditoria, mensageria e observabilidade.
+Backend Java para simulação de transferências PIX, construído com foco em consistência financeira, idempotência, concorrência, auditoria e arquitetura evolutiva.
 
-> Projeto educacional. Não possui integração real com BACEN, DICT ou SPI.
+O projeto reproduz desafios comuns em bancos e fintechs: impedir movimentações duplicadas, proteger saldo contra atualizações concorrentes, registrar lançamentos imutáveis e garantir persistência atômica de eventos.
 
-## Objetivo
+> Projeto educacional e de portfólio. Não possui integração real com BACEN, DICT ou SPI.
 
-Construir uma aplicação que evolua de um domínio Java bem modelado para uma API distribuída próxima dos desafios encontrados em bancos e fintechs.
+## Tecnologias
 
-Ao final, o projeto deverá demonstrar:
+- Java 21
+- Spring Boot 3.3.2
+- Spring Web e Bean Validation
+- Spring Data JPA e Hibernate
+- PostgreSQL 16
+- Flyway
+- OpenAPI 3 e Swagger UI
+- JUnit 5, Mockito e ArchUnit
+- JaCoCo
+- Docker e Docker Compose
+- GitHub Actions
 
-- Java 21 e Spring Boot 4;
-- arquitetura hexagonal;
-- API REST documentada com OpenAPI;
-- PostgreSQL para contas, saldos e lançamentos;
-- Redis para cache e idempotência;
-- mensageria para processamento assíncrono;
-- autenticação OAuth2/JWT;
-- testes unitários, de integração e de concorrência;
-- logs, métricas e tracing;
-- Docker, Kubernetes e CI/CD.
+## Funcionalidades implementadas
 
-## Fluxo principal
+- criação de transferências entre contas identificadas por chaves PIX;
+- validação de saldo, limite diário e estado da conta;
+- `Money` como value object baseado em `BigDecimal`;
+- idempotência persistente pelo header `Idempotency-Key`;
+- fingerprint SHA-256 para impedir reutilização da chave com outro payload;
+- optimistic locking com `@Version`;
+- retry de conflitos otimistas em transações independentes;
+- ledger imutável com lançamentos de débito e crédito;
+- Transactional Outbox persistida junto da transferência;
+- auditoria JPA com `created_by` e `last_modified_by`;
+- migrations versionadas com Flyway;
+- respostas de erro no padrão RFC 7807;
+- documentação OpenAPI;
+- testes unitários, arquiteturais, integração e concorrência real.
+
+## Fluxo da transferência
 
 ```text
-Cliente solicita transferência
-        |
-        v
-API autentica e valida a requisição
-        |
-        v
-Chave de idempotência já foi utilizada?
-   | não                  | sim
-   v                      v
-Valida contas,       Retorna o resultado
-chave, saldo e       previamente registrado
-limites
-        |
-        v
-Registra débito e crédito atomicamente
-        |
-        v
-Publica evento pela Outbox
-        |
-        v
-Notificação, auditoria e antifraude
+POST /api/v1/pix-transfers
+            |
+            v
+Validação do Idempotency-Key e fingerprint
+            |
+            v
+Reserva idempotente em transação independente
+            |
+            v
+Validação das chaves PIX e contas
+            |
+            v
+Débito e crédito com optimistic locking
+            |
+            v
+Transferência + ledger + idempotência + outbox
+            |
+            v
+Commit atômico no PostgreSQL
 ```
 
-## Arquitetura-alvo
+Saldo, transferência, dois lançamentos do ledger, resultado idempotente e evento da outbox compartilham a mesma transação. Falha em qualquer gravação causa rollback completo.
+
+## Arquitetura
+
+O projeto segue arquitetura hexagonal com fluxo de dependências direcionado ao domínio:
 
 ```text
-src/main/java/com/phenriq/pix
+HTTP Adapter
+    |
+    v
+Application Services
+    |
+    v
+Domain Models + Ports
+    ^
+    |
+JPA Persistence Adapters
+```
+
+```text
+src/main/java/com/pdonha/pix
 ├── domain
 │   ├── model
-│   ├── service
+│   ├── event
+│   ├── port
 │   └── exception
 ├── application
-│   ├── port/in
-│   ├── port/out
-│   └── usecase
+│   ├── dto
+│   └── service
 ├── adapter
-│   ├── in/web
-│   └── out
-│       ├── persistence
-│       ├── cache
-│       └── messaging
-└── infrastructure
-    └── configuration
+│   ├── in/http
+│   └── out/persistence
+└── PixTransferSystemApplication
 ```
 
-O domínio não dependerá de Spring, banco de dados ou mensageria. Essas tecnologias serão conectadas por portas e adaptadores.
+Regras ArchUnit impedem dependências do domínio para Spring/JPA e dependências da aplicação para adapters.
 
-## Domínio inicial
+## Consistência financeira
 
-| Componente | Responsabilidade |
-|---|---|
-| `Customer` | Representar o titular da conta |
-| `Account` | Proteger saldo, estado e limites |
-| `PixKey` | Associar uma chave válida a uma conta |
-| `PixTransfer` | Representar o ciclo de vida da transferência |
-| `LedgerEntry` | Registrar débito ou crédito de forma auditável |
+### Idempotência
 
-Valores monetários usarão `BigDecimal`. Identificadores usarão UUID. Datas usarão `Instant` em UTC.
+Cada requisição reserva uma chave única no PostgreSQL. Repetição do mesmo payload retorna a transferência já registrada, sem movimentar saldo novamente. Mesma chave com payload diferente retorna `409 Conflict`.
 
-## Regras essenciais
+### Concorrência
 
-- uma transferência deve possuir uma chave de idempotência;
-- débito e crédito devem ocorrer na mesma transação;
-- nenhuma conta pode ficar com saldo negativo;
-- contas bloqueadas não podem movimentar valores;
-- uma chave PIX ativa pertence a uma única conta;
-- limites podem variar por cliente e período;
-- o histórico financeiro é imutável;
-- dados sensíveis não podem aparecer em logs;
-- falhas assíncronas devem aceitar retry e DLQ.
+Contas e transferências possuem versão otimista. Atualizações baseadas em versão obsoleta falham e são repetidas em nova transação, evitando lost updates.
 
-## Trilha de conquistas
+### Ledger
 
-Cada conquista deve caber em uma sessão de 45 a 90 minutos e terminar com código funcionando. O projeto seguirá duas metas: publicar um MVP rapidamente e depois evoluí-lo sem atalhos técnicos.
+Cada transferência gera dois lançamentos imutáveis:
 
-### Nível 1 — Java bancário
+- `DEBIT` na conta pagadora;
+- `CREDIT` na conta recebedora.
 
-**Recompensa:** domínio executável e testado, sem framework.
+Cada lançamento registra valor e saldo posterior. Constraints impedem duplicação por transferência, conta e tipo.
 
-- [ ] **1. Projeto nasce:** Maven, Java 21, pacotes e primeiro teste
-- [ ] **2. Dinheiro seguro:** criar `Money` ou padronizar `BigDecimal`
-- [ ] **3. Cliente existe:** modelar `Customer` com invariantes
-- [ ] **4. Conta protege saldo:** depósito, débito, bloqueio e limites
-- [ ] **5. Chave encontra conta:** modelar tipos e ciclo de vida da `PixKey`
-- [ ] **6. Primeiro PIX:** transferir entre duas contas em memória
-- [ ] **7. Falhas explícitas:** criar exceções de domínio
-- [ ] **8. Domínio confiável:** cobrir regras críticas com JUnit 5
+### Transactional Outbox
 
-### Nível 2 — MVP para portfólio
+Eventos são persistidos na tabela `event_store` durante a mesma transação da transferência. A estrutura contém status, tentativas e agendamento para futura publicação assíncrona.
 
-**Recompensa:** primeira versão publicável e utilizável por HTTP.
+O projeto não afirma usar Event Sourcing: estado dos agregados não é reconstruído por replay.
 
-- [ ] **9. Spring entra:** criar aplicação sem contaminar o domínio
-- [ ] **10. Casos de uso:** implementar portas de entrada e saída
-- [ ] **11. API REST:** criar clientes, contas, chaves e transferências
-- [ ] **12. Contrato profissional:** validação, Problem Details e OpenAPI
-- [ ] **13. Dados persistentes:** PostgreSQL e migrations com Flyway
-- [ ] **14. Ambiente reproduzível:** Docker Compose e instruções de execução
-- [ ] **15. Qualidade automática:** testes no GitHub Actions
+## API
 
-Ao concluir este nível, o projeto já poderá entrar no currículo e receber melhorias contínuas.
-
-### Nível 3 — Confiabilidade financeira
-
-**Recompensa:** solução capaz de explicar desafios reais de sistemas bancários.
-
-- [ ] **16. PIX sem duplicidade:** `Idempotency-Key` com Redis
-- [ ] **17. Concorrência segura:** locking e testes de débitos simultâneos
-- [ ] **18. Ledger auditável:** lançamentos imutáveis de débito e crédito
-- [ ] **19. Eventos confiáveis:** Transactional Outbox e mensageria
-- [ ] **20. Falhas controladas:** retry, backoff, DLQ e consumidor idempotente
-
-### Nível 4 — Pronto para entrevista
-
-**Recompensa:** portfólio alinhado a bancos e fintechs de grande porte.
-
-- [ ] **21. API protegida:** OAuth2 Resource Server, JWT e autorização
-- [ ] **22. Operação visível:** logs estruturados e correlation ID
-- [ ] **23. Saúde mensurável:** Actuator, Micrometer e Prometheus
-- [ ] **24. Fluxo rastreável:** OpenTelemetry e tracing distribuído
-- [ ] **25. Entrega moderna:** Docker, Kubernetes e pipeline completo
-- [ ] **26. Evidência técnica:** diagrama, decisões arquiteturais e demonstração
-
-## Como vamos aprender e entregar rápido
-
-Para cada conquista:
-
-1. eu explico o conceito e comparo com C# quando isso ajudar;
-2. você propõe a modelagem ou algoritmo;
-3. você implementa o primeiro trecho;
-4. eu reviso funcionalidade, Java idiomático, Clean Code e SOLID;
-5. corrigimos juntos e registramos a conquista;
-6. eu só forneço a solução completa se você ficar bloqueado.
-
-Não criaremos abstrações antecipadamente. Primeiro faremos uma fatia vertical funcionar; depois adicionaremos robustez com uma necessidade concreta.
-
-### Ritmo sustentável
-
-- uma conquista por sessão;
-- pausa após 60 minutos;
-- no máximo duas conquistas no mesmo dia;
-- commit pequeno ao concluir cada conquista;
-- um dia semanal sem projeto;
-- se uma etapa ficar grande, ela será dividida antes de continuar.
-
-### Paralelo C# → Java
-
-Durante as revisões, daremos atenção especial a:
-
-- propriedades do C# versus encapsulamento e métodos em Java;
-- `decimal` versus `BigDecimal`;
-- LINQ versus Streams;
-- records do C# versus records do Java;
-- ASP.NET Core DI versus Spring DI;
-- Entity Framework versus Spring Data JPA/Hibernate;
-- `async/await` versus concorrência e programação assíncrona em Java.
-
-## API planejada
-
-```http
-POST   /api/v1/customers
-POST   /api/v1/accounts
-POST   /api/v1/pix-keys
-DELETE /api/v1/pix-keys/{id}
-POST   /api/v1/pix-transfers
-GET    /api/v1/pix-transfers/{id}
-GET    /api/v1/accounts/{id}/statement
-```
-
-Exemplo:
+### Criar transferência
 
 ```http
 POST /api/v1/pix-transfers
+Content-Type: application/json
 Idempotency-Key: 816f0f4e-4ef7-4f3d-a9d6-8f617dcceb32
-Authorization: Bearer <token>
 ```
 
 ```json
 {
-  "sourceAccountId": "5f84c720-8d64-42ab-b9dd-a0569e522fd1",
-  "targetPixKey": "cliente@exemplo.com",
-  "amount": 150.00,
-  "description": "Pagamento"
+  "originPixKey": "12345678900",
+  "destinationPixKey": "cliente@exemplo.com",
+  "amount": 150.00
 }
 ```
 
-## Estratégia de testes
+Resposta:
 
-| Tipo | O que comprova |
-|---|---|
-| Unitário | Regras do domínio e casos de uso |
-| Integração | PostgreSQL, Redis e mensageria |
-| Contrato | Compatibilidade da API |
-| Concorrência | Proteção contra débito duplicado |
-| Carga | Latência e capacidade |
+```json
+{
+  "transfer_id": "968d5db4-f37a-42f4-9758-f405a19f9d19",
+  "status": "PENDING",
+  "amount": 150.00,
+  "created_at": "2026-08-21T10:30:00"
+}
+```
 
-Cobertura será usada como indicador, não como objetivo isolado.
+### Erros
 
-## Decisões importantes
+Erros seguem RFC 7807:
 
-- **PostgreSQL no core financeiro:** transações e integridade são prioritárias.
-- **Redis fora da fonte de verdade:** cache não determina o saldo oficial.
-- **Outbox em vez de publicação direta:** evita salvar a transferência e perder o evento.
-- **Arquitetura hexagonal:** mantém domínio testável e independente do framework.
-- **Monólito modular primeiro:** microsserviços serão considerados apenas quando houver uma razão mensurável.
+```json
+{
+  "type": "/problems/insufficient-balance",
+  "title": "Transfer cannot be processed",
+  "status": 422,
+  "detail": "Insufficient balance for withdrawal",
+  "error_code": "INSUFFICIENT_BALANCE"
+}
+```
 
-## Fora do escopo
+### Documentação
 
-- conexão real com a infraestrutura do PIX;
-- armazenamento de credenciais bancárias reais;
-- alegação de conformidade regulatória;
-- simulação completa do ecossistema BACEN.
+- Swagger UI: `http://localhost:8080/swagger-ui.html`
+- OpenAPI JSON: `http://localhost:8080/api-docs`
+- Health check: `http://localhost:8080/actuator/health`
 
-## Critério final de sucesso
+## Executando com Docker
 
-O projeto estará pronto para portfólio quando:
+Pré-requisito: Docker com Compose.
 
-- regras críticas estiverem testadas;
-- concorrência e idempotência forem demonstradas;
-- API e decisões arquiteturais estiverem documentadas;
-- ambiente iniciar com um único comando;
-- pipeline validar build, testes e segurança;
-- dashboards permitirem investigar uma transferência;
-- nenhuma etapa do README afirmar integração bancária inexistente.
+```bash
+git clone https://github.com/pdonha-dev/pix-transfer-system.git
+cd pix-transfer-system
+docker compose up -d --build
+```
 
-## Status
+Serviços iniciados:
 
-**Fase atual:** planejamento e modelagem do domínio.
+- aplicação: `localhost:8080`;
+- PostgreSQL: `localhost:5432`.
 
-O primeiro incremento será uma transferência entre duas contas em memória, implementada em Java puro e coberta por testes.
+Verificar estado:
+
+```bash
+docker compose ps
+docker compose logs app
+```
+
+Encerrar:
+
+```bash
+docker compose down
+```
+
+Volumes do PostgreSQL são preservados. Use `docker compose down -v` somente quando quiser remover os dados locais.
+
+## Executando testes
+
+Testes unitários:
+
+```bash
+mvn clean test
+```
+
+Pipeline completo:
+
+```bash
+mvn clean verify
+```
+
+O pipeline atual executa:
+
+- 87 testes unitários e arquiteturais;
+- 11 testes de integração;
+- 98 testes no total;
+- cobertura JaCoCo de 76,81% das linhas;
+- validação das dependências arquiteturais;
+- testes de concorrência com PostgreSQL real.
+
+Relatório de cobertura:
+
+```text
+target/site/jacoco/index.html
+```
+
+## Banco de dados
+
+Flyway controla todo o schema. Hibernate usa `ddl-auto: validate`, sem alterar tabelas automaticamente.
+
+As migrations atuais cobrem:
+
+- contas, chaves PIX e transferências;
+- idempotência;
+- optimistic locking;
+- auditoria;
+- event store/outbox;
+- audit logs;
+- fingerprint de requisições;
+- ledger financeiro imutável.
+
+## Decisões técnicas
+
+- **PostgreSQL como fonte de verdade:** integridade e transações prevalecem sobre cache.
+- **Sem Redis sem necessidade concreta:** cache exige TTL, invalidação, fallback e testes próprios.
+- **Monólito modular primeiro:** microsserviços somente quando houver motivação mensurável.
+- **Outbox em vez de publicação direta:** evita transferência persistida sem evento correspondente.
+- **Ledger append-only:** histórico financeiro não é atualizado nem removido.
+- **Adapters isolados:** domínio permanece independente de frameworks.
+
+## Próximas evoluções
+
+- Resilience4j: Circuit Breaker, Retry, TimeLimiter e Bulkhead;
+- OAuth2 Resource Server com JWT;
+- logs estruturados e correlation ID;
+- métricas Prometheus com Micrometer;
+- tracing com OpenTelemetry;
+- publicação assíncrona da outbox e DLQ;
+- Kubernetes e automação de entrega.
+
+## Limitações
+
+- não processa transferências no sistema PIX real;
+- não consulta DICT ou SPI;
+- não implementa autenticação nesta etapa;
+- não representa conformidade regulatória ou certificação bancária;
+- não deve armazenar dados financeiros reais.

@@ -35,13 +35,6 @@ public class JpaAccountRepository implements AccountRepository {
     @Override
     public void save(Account account) {
         AccountJpaEntity entity = converter.toJpaEntity(account);
-        AccountJpaEntity existing = springRepo.findById(account.getId()).orElse(null);
-        
-        if (existing != null) {
-            entity.setVersion(existing.getVersion());
-            entity = springRepo.saveAndFlush(entity);
-        } else {
-            springRepo.save(entity);
-        }
+        springRepo.saveAndFlush(entity);
     }
 }

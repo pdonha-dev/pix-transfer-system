@@ -12,14 +12,15 @@ public class EventStoreConverter {
             return null;
         }
         
-        return new EventStore(
+        return EventStore.rehydrate(
             entity.getId(),
             entity.getEventId(),
             entity.getEventType(),
             entity.getAggregateId(),
             entity.getAggregateType(),
             entity.getAggregateVersion(),
-            entity.getEventData()
+            entity.getEventData(),
+            entity.getStoredAt()
         );
     }
     

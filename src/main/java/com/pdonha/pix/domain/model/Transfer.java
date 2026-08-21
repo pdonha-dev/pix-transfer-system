@@ -2,8 +2,8 @@ package com.pdonha.pix.domain.model;
 
 import com.pdonha.pix.domain.exception.InvalidTransferException;
 import com.pdonha.pix.domain.exception.InvalidTransferStatusException;
-import com.pdonha.pix.domain.exception.PixException;
 import com.pdonha.pix.domain.event.DomainEvent;
+import com.pdonha.pix.domain.event.TransferCreatedEvent;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -19,9 +19,17 @@ public class Transfer {
     private TransferStatus status;
     private final LocalDateTime createdAt;
     private LocalDateTime updatedAt;
-    private final List<DomainEvent> events;
+    private final List<DomainEvent> pendingEvents;
+    private final Long version;
 
     public Transfer(UUID id, UUID payerAccountId, UUID payeeAccountId, Money amount) {
+        this(id, payerAccountId, payeeAccountId, amount, TransferStatus.PENDING,
+                LocalDateTime.now(), LocalDateTime.now(), null, true);
+    }
+
+    private Transfer(UUID id, UUID payerAccountId, UUID payeeAccountId, Money amount,
+                     TransferStatus status, LocalDateTime createdAt, LocalDateTime updatedAt,
+                     Long version, boolean emitCreatedEvent) {
         if (id == null) {
             throw new InvalidTransferException("Transfer ID cannot be null");
         }
@@ -37,15 +45,28 @@ public class Transfer {
         if (payeeAccountId.equals(payerAccountId)) {
             throw new InvalidTransferException("Cannot transfer to the same account");
         }
+        if (status == null || createdAt == null || updatedAt == null) {
+            throw new InvalidTransferException("Persisted transfer state cannot contain null fields");
+        }
 
         this.id = id;
         this.payerAccountId = payerAccountId;
         this.payeeAccountId = payeeAccountId;
         this.amount = amount;
-        this.status = TransferStatus.PENDING;
-        this.createdAt = LocalDateTime.now();
-        this.updatedAt = LocalDateTime.now();
-        this.events = new ArrayList<>();
+        this.status = status;
+        this.createdAt = createdAt;
+        this.updatedAt = updatedAt;
+        this.pendingEvents = new ArrayList<>();
+        this.version = version;
+        if (emitCreatedEvent) {
+            pendingEvents.add(new TransferCreatedEvent(id, payerAccountId, payeeAccountId, amount, "system"));
+        }
+    }
+
+    public static Transfer rehydrate(UUID id, UUID payerAccountId, UUID payeeAccountId, Money amount,
+                                     TransferStatus status, LocalDateTime createdAt,
+                                     LocalDateTime updatedAt, Long version) {
+        return new Transfer(id, payerAccountId, payeeAccountId, amount, status, createdAt, updatedAt, version, false);
     }
 
     public UUID getId() {
@@ -76,16 +97,25 @@ public class Transfer {
         return updatedAt;
     }
 
-    public List<DomainEvent> getEvents() {
-        return new ArrayList<>(events);
+    public Long getVersion() {
+        return version;
     }
 
-    public void addEvent(DomainEvent event) {
-        this.events.add(event);
+    public List<DomainEvent> getPendingEvents() {
+        return List.copyOf(pendingEvents);
     }
 
-    public void clearEvents() {
-        this.events.clear();
+    public void addPendingEvent(DomainEvent event) {
+        if (event == null) {
+            throw new InvalidTransferException("Domain event cannot be null");
+        }
+        pendingEvents.add(event);
+    }
+
+    public List<DomainEvent> drainPendingEvents() {
+        List<DomainEvent> drained = List.copyOf(pendingEvents);
+        pendingEvents.clear();
+        return drained;
     }
 
     public void complete() {
