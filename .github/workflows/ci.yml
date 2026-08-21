@@ -1,38 +1,86 @@
-name: CI - Build & Test
+name: Continuous Integration
 
 on:
   push:
-    branches: [ main, develop ]
+    branches:
+      - main
+      - develop
   pull_request:
-    branches: [ main, develop ]
+    branches:
+      - main
+      - develop
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 env:
-  JAVA_VERSION: '21'
-  MAVEN_VERSION: '3.9.8'
+  JAVA_VERSION: "21"
+  MAVEN_CLI_OPTS: --batch-mode --no-transfer-progress --show-version
 
 jobs:
   validate:
-    name: Validate & Lint
+    name: Validate and compile
     runs-on: ubuntu-latest
+    timeout-minutes: 10
+
     steps:
-      - name: Checkout code
+      - name: Check out repository
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0
+          persist-credentials: false
 
-      - name: Set up JDK 21
+      - name: Set up Java
         uses: actions/setup-java@v4
         with:
+          distribution: temurin
           java-version: ${{ env.JAVA_VERSION }}
-          distribution: 'temurin'
           cache: maven
 
-      - name: Run Maven compile (triggers CheckStyle validation)
-        run: mvn clean compile -B -V
+      - name: Validate project and compile sources
+        run: mvn $MAVEN_CLI_OPTS clean compile
 
-  test:
-    name: Unit & Integration Tests
+  unit-tests:
+    name: Unit tests
+    needs: validate
     runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: ${{ env.JAVA_VERSION }}
+          cache: maven
+
+      - name: Run unit tests
+        run: mvn $MAVEN_CLI_OPTS test
+
+      - name: Upload unit test reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: unit-test-reports
+          path: target/surefire-reports/
+          if-no-files-found: warn
+          retention-days: 7
+
+  integration-tests:
+    name: Integration tests
+    needs: validate
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
     services:
       postgres:
         image: postgres:16-alpine
@@ -40,129 +88,100 @@ jobs:
           POSTGRES_DB: pix_transfer_test
           POSTGRES_USER: postgres
           POSTGRES_PASSWORD: postgres
-        options: >-
-          --health-cmd pg_isready
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
         ports:
           - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d pix_transfer_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
 
     steps:
-      - name: Checkout code
+      - name: Check out repository
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0
+          persist-credentials: false
 
-      - name: Set up JDK 21
+      - name: Set up Java
         uses: actions/setup-java@v4
         with:
+          distribution: temurin
           java-version: ${{ env.JAVA_VERSION }}
-          distribution: 'temurin'
           cache: maven
 
-      - name: Wait for PostgreSQL
-        run: |
-          until pg_isready -h localhost -p 5432 -U postgres; do
-            sleep 2
-          done
-
-      - name: Run Unit & Integration Tests
-        run: mvn verify -B -V -Dnet.bytebuddy.experimental=true
+      - name: Run integration tests
+        run: >-
+          mvn $MAVEN_CLI_OPTS
+          test-compile
+          failsafe:integration-test
+          failsafe:verify
         env:
+          SPRING_PROFILES_ACTIVE: test
           SPRING_DATASOURCE_URL: jdbc:postgresql://localhost:5432/pix_transfer_test
-          SPRING_DATASOURCE_USERNAME: postgres
-          SPRING_DATASOURCE_PASSWORD: postgres
+          DB_USERNAME: postgres
+          DB_PASSWORD: postgres
 
-      - name: Upload test results
+      - name: Upload integration test reports
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: test-results
-          path: target/surefire-reports/
+          name: integration-test-reports
+          path: target/failsafe-reports/
+          if-no-files-found: warn
+          retention-days: 7
 
-      - name: Upload coverage reports
-        if: success()
-        uses: actions/upload-artifact@v4
-        with:
-          name: coverage-reports
-          path: target/site/jacoco/
-
-  build:
-    name: Build Package
-    needs: test
+  package:
+    name: Package application
+    needs:
+      - unit-tests
+      - integration-tests
     runs-on: ubuntu-latest
+    timeout-minutes: 10
+
     steps:
-      - name: Checkout code
+      - name: Check out repository
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0
+          persist-credentials: false
 
-      - name: Set up JDK 21
+      - name: Set up Java
         uses: actions/setup-java@v4
         with:
+          distribution: temurin
           java-version: ${{ env.JAVA_VERSION }}
-          distribution: 'temurin'
           cache: maven
 
-      - name: Build JAR package
-        run: mvn package -B -V -DskipTests
+      - name: Build executable JAR
+        run: mvn $MAVEN_CLI_OPTS package -DskipTests
 
-      - name: Upload JAR artifact
+      - name: Upload application artifact
         uses: actions/upload-artifact@v4
         with:
-          name: pix-transfer-system
+          name: pix-transfer-system-${{ github.sha }}
           path: target/*.jar
-          retention-days: 30
+          if-no-files-found: error
+          retention-days: 14
 
-  sonarqube:
-    name: Code Quality Analysis
-    needs: test
+  container:
+    name: Build container image
+    needs: package
     runs-on: ubuntu-latest
+    timeout-minutes: 15
+
     steps:
-      - name: Checkout code
+      - name: Check out repository
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0
+          persist-credentials: false
 
-      - name: Set up JDK 21
-        uses: actions/setup-java@v4
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build container image
+        uses: docker/build-push-action@v6
         with:
-          java-version: ${{ env.JAVA_VERSION }}
-          distribution: 'temurin'
-          cache: maven
-
-      - name: SonarQube Analysis
-        run: >-
-          mvn verify 
-          -B -V 
-          -DskipTests 
-          -Dsonar.projectKey=${{ github.event.repository.name }}
-          -Dsonar.sources=src/main
-          -Dsonar.tests=src/test
-          -Dsonar.coverage.jacoco.xmlReportPaths=target/site/jacoco/jacoco.xml
-        env:
-          SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
-          SONAR_LOGIN: ${{ secrets.SONAR_TOKEN }}
-
-  summary:
-    name: Build Summary
-    needs: [ validate, test, build, sonarqube ]
-    runs-on: ubuntu-latest
-    if: always()
-    steps:
-      - name: Print CI Summary
-        run: |
-          echo "✅ CI Pipeline Complete"
-          echo "Jobs Status:"
-          echo "  - Validate: ${{ needs.validate.result }}"
-          echo "  - Test: ${{ needs.test.result }}"
-          echo "  - Build: ${{ needs.build.result }}"
-          echo "  - SonarQube: ${{ needs.sonarqube.result }}"
-
-      - name: Fail if any job failed
-        if: |
-          needs.validate.result == 'failure' ||
-          needs.test.result == 'failure' ||
-          needs.build.result == 'failure'
-        run: exit 1
+          context: .
+          push: false
+          tags: pix-transfer-system:ci
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
