@@ -1,0 +1,13 @@
+target/
+.git/
+.gitignore
+.idea/
+*.iml
+*.ipr
+*.iws
+*.log
+.env
+.env.*
+README.md
+LICENSE
+*.md

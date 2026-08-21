@@ -20,11 +20,7 @@ public class TransferConverter {
             entity.getPayeeAccountId(),
             new Money(entity.getAmount())
         );
-        
-        // Nota: Transfer cria com PENDING automaticamente
-        // Se entity tem outro status, precisamos de um método setter no domain
-        // Por enquanto, assumindo que PENDING no banco = PENDING no domain
-        
+
         return transfer;
     }
     
