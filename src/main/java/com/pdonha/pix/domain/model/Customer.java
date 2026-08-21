@@ -1,7 +1,7 @@
 package com.pdonha.pix.domain.model;
 
 import com.pdonha.pix.domain.exception.InvalidCpfException;
-import com.pdonha.pix.domain.exception.PixException;
+import com.pdonha.pix.domain.exception.InvalidCustomerException;
 
 import java.util.UUID;
 
@@ -12,10 +12,10 @@ public final class Customer {
 
     public Customer(UUID id, String name, String cpf) {
         if (id == null) {
-            throw new PixException("Customer ID cannot be null");
+            throw new InvalidCustomerException("Customer ID cannot be null");
         }
         if (name == null || name.isBlank()) {
-            throw new PixException("Customer name cannot be null or empty");
+            throw new InvalidCustomerException("Customer name cannot be null or empty");
         }
         if (cpf == null || !cpf.matches("\\d{11}")) {
             throw new InvalidCpfException("CPF must contain exactly 11 digits", cpf);

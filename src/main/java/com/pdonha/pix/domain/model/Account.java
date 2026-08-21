@@ -4,10 +4,13 @@ import com.pdonha.pix.domain.exception.AccountAlreadyActiveException;
 import com.pdonha.pix.domain.exception.AccountBlockedException;
 import com.pdonha.pix.domain.exception.DailyLimitExceededException;
 import com.pdonha.pix.domain.exception.InsufficientBalanceException;
-import com.pdonha.pix.domain.exception.PixException;
+import com.pdonha.pix.domain.exception.InvalidAccountException;
+import com.pdonha.pix.domain.event.DomainEvent;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.UUID;
 
 public class Account {
@@ -19,25 +22,26 @@ public class Account {
     private boolean isActive;
     private final LocalDateTime createdAt;
     private LocalDateTime updatedAt;
+    private final List<DomainEvent> events;
 
     public Account(UUID id, UUID customerId, Money initialBalance, Money dailyLimit) {
         if(id == null) {
-            throw new PixException("Account ID cannot be null");
+            throw new InvalidAccountException("Account ID cannot be null");
         }
         if(customerId == null) {
-            throw new PixException("Customer ID cannot be null");
+            throw new InvalidAccountException("Customer ID cannot be null");
         }
         if(initialBalance == null) {
-            throw new PixException("Initial balance cannot be null");
+            throw new InvalidAccountException("Initial balance cannot be null");
         }
         if(!initialBalance.isGreaterThanOrEqual(new Money(BigDecimal.ZERO))) {
-            throw new PixException("Initial balance cannot be negative");
+            throw new InvalidAccountException("Initial balance cannot be negative");
         }
         if(dailyLimit == null) {
-            throw new PixException("Daily limit cannot be null");
+            throw new InvalidAccountException("Daily limit cannot be null");
         }
         if(dailyLimit.isLessThan(new Money(BigDecimal.ONE))) {
-            throw new PixException("Daily limit must be at least 1.00");
+            throw new InvalidAccountException("Daily limit must be at least 1.00");
         }
 
         this.id = id;
@@ -48,6 +52,7 @@ public class Account {
         this.isActive = true;
         this.createdAt = LocalDateTime.now();
         this.updatedAt = LocalDateTime.now();
+        this.events = new ArrayList<>();
     }
 
     public UUID getId() {
@@ -80,6 +85,18 @@ public class Account {
 
     public LocalDateTime getUpdatedAt() {
         return updatedAt;
+    }
+
+    public List<DomainEvent> getEvents() {
+        return new ArrayList<>(events);
+    }
+
+    public void addEvent(DomainEvent event) {
+        this.events.add(event);
+    }
+
+    public void clearEvents() {
+        this.events.clear();
     }
 
     public void deposit(Money amount) {

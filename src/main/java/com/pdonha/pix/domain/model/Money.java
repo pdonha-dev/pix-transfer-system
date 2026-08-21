@@ -1,6 +1,6 @@
 package com.pdonha.pix.domain.model;
 
-import com.pdonha.pix.domain.exception.PixException;
+import com.pdonha.pix.domain.exception.InvalidMoneyException;
 
 import java.math.BigDecimal;
 
@@ -9,10 +9,10 @@ public final class Money {
 
     public Money(BigDecimal amount) {
         if (amount == null) {
-            throw new PixException("Amount cannot be null");
+            throw new InvalidMoneyException("Amount cannot be null");
         }
         if (amount.compareTo(BigDecimal.ZERO) < 0) {
-            throw new PixException("Amount cannot be negative");
+            throw new InvalidMoneyException("Amount cannot be negative");
         }
 
         this.amount = amount;

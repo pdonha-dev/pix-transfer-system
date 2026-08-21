@@ -1,7 +1,6 @@
 package com.pdonha.pix.domain.model;
 
-import com.pdonha.pix.domain.exception.PixException;
-import com.pdonha.pix.domain.exception.PixKeyInvalidException;
+import com.pdonha.pix.domain.exception.InvalidPixKeyException;
 import com.pdonha.pix.domain.exception.PixKeyInvalidException;
 
 import java.time.LocalDateTime;
@@ -18,13 +17,13 @@ public class PixKey {
 
     public PixKey(UUID id, UUID accountId, PixKeyType type, String value) {
         if (id == null) {
-            throw new PixException("Pix key ID cannot be null");
+            throw new InvalidPixKeyException("Pix key ID cannot be null");
         }
         if (accountId == null) {
-            throw new PixException("Account ID cannot be null");
+            throw new InvalidPixKeyException("Account ID cannot be null");
         }
         if (type == null) {
-            throw new PixException("Pix key type cannot be null");
+            throw new InvalidPixKeyException("Pix key type cannot be null");
         }
         if (!type.isValid(value)) {
             throw new PixKeyInvalidException("Pix key value does not match the specified type");

@@ -5,6 +5,7 @@ import com.pdonha.pix.application.dto.result.TransferResult;
 import com.pdonha.pix.domain.exception.IdempotencyKeyFailedException;
 import com.pdonha.pix.domain.exception.IdempotencyKeyInvalidException;
 import com.pdonha.pix.domain.exception.IdempotencyKeyStillProcessingException;
+import com.pdonha.pix.domain.exception.RetryInterruptedException;
 import com.pdonha.pix.domain.model.IdempotencyKey;
 import com.pdonha.pix.domain.model.IdempotencyStatus;
 import com.pdonha.pix.domain.port.IdempotencyKeyRepository;
@@ -78,7 +79,7 @@ public class IdempotencyService {
                     Thread.sleep(RETRY_DELAY_MS * (long) Math.pow(2, attempt));
                 } catch (InterruptedException ie) {
                     Thread.currentThread().interrupt();
-                    throw new RuntimeException("Retry interrupted", ie);
+                    throw new RetryInterruptedException("Retry interrupted", ie);
                 }
                 return executeWithRetry(idempotencyKey, command, attempt + 1);
             }

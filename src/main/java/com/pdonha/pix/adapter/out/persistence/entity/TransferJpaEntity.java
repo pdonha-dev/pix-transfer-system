@@ -33,6 +33,15 @@ public class TransferJpaEntity {
     @Column(name = "updated_at", nullable = false)
     private LocalDateTime updatedAt;
     
+    @Column(name = "created_by")
+    private String createdBy;
+    
+    @Column(name = "last_modified_by")
+    private String lastModifiedBy;
+    
+    @Column(name = "deleted_at")
+    private LocalDateTime deletedAt;
+    
     public UUID getId() {
         return id;
     }
@@ -87,6 +96,30 @@ public class TransferJpaEntity {
     
     public void setUpdatedAt(LocalDateTime updatedAt) {
         this.updatedAt = updatedAt;
+    }
+
+    public String getCreatedBy() {
+        return createdBy;
+    }
+
+    public void setCreatedBy(String createdBy) {
+        this.createdBy = createdBy;
+    }
+
+    public String getLastModifiedBy() {
+        return lastModifiedBy;
+    }
+
+    public void setLastModifiedBy(String lastModifiedBy) {
+        this.lastModifiedBy = lastModifiedBy;
+    }
+
+    public LocalDateTime getDeletedAt() {
+        return deletedAt;
+    }
+
+    public void setDeletedAt(LocalDateTime deletedAt) {
+        this.deletedAt = deletedAt;
     }
 
     public Long getVersion() {
