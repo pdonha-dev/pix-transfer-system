@@ -24,6 +24,7 @@ O projeto reproduz desafios comuns em bancos e fintechs: impedir movimentações
 ## Funcionalidades implementadas
 
 - criação de transferências entre contas identificadas por chaves PIX;
+- endpoints locais para criar clientes, contas, chaves PIX e saldo de teste;
 - validação de saldo, limite diário e estado da conta;
 - `Money` como value object baseado em `BigDecimal`;
 - idempotência persistente pelo header `Idempotency-Key`;
@@ -165,6 +166,46 @@ Idempotency-Key: 816f0f4e-4ef7-4f3d-a9d6-8f617dcceb32
 }
 ```
 
+### Preparar um cenário manual
+
+Os endpoints da tag **Test Setup** permitem executar o fluxo completo pelo
+Swagger ou por qualquer cliente HTTP. Eles ficam habilitados somente nos perfis
+`dev`, `docker` e `test`; produção permanece desabilitada por padrão.
+Para executar localmente sem Docker, selecione o perfil de desenvolvimento:
+`SPRING_PROFILES_ACTIVE=dev mvn spring-boot:run`.
+
+1. `POST /api/v1/customers`
+   ```json
+   { "name": "Ana Silva", "cpf": "12345678900" }
+   ```
+2. `POST /api/v1/accounts`
+   ```json
+   {
+     "customerId": "<customer-id>",
+     "initialBalance": 0.00,
+     "dailyLimit": 5000.00
+   }
+   ```
+3. `POST /api/v1/accounts/<account-id>/deposits`
+   ```json
+   { "amount": 1000.00 }
+   ```
+4. `POST /api/v1/pix-keys`
+   ```json
+   {
+     "accountId": "<account-id>",
+     "type": "EMAIL",
+     "value": "ana@example.com"
+   }
+   ```
+5. Repita para a conta recebedora, então crie a transferência em
+   `POST /api/v1/pix-transfers`.
+6. Consulte o saldo, limite usado e chaves em
+   `GET /api/v1/accounts/<account-id>`.
+
+O endpoint de aporte existe exclusivamente para demonstração local. Um fluxo
+real exigiria autenticação, uma origem de liquidação e lançamentos próprios.
+
 Resposta:
 
 ```json
@@ -244,10 +285,10 @@ mvn clean verify
 
 O pipeline atual executa:
 
-- 98 testes unitários e arquiteturais;
-- 11 testes de integração;
-- 109 testes no total;
-- cobertura JaCoCo de 76,51% das linhas;
+- 109 testes unitários e arquiteturais;
+- 13 testes de integração;
+- 122 testes no total;
+- cobertura JaCoCo de 79,96% das linhas;
 - validação das dependências arquiteturais;
 - testes de concorrência com PostgreSQL real.
 
@@ -271,6 +312,7 @@ As migrations atuais cobrem:
 - audit logs;
 - fingerprint de requisições;
 - ledger financeiro imutável.
+- clientes para criação de cenários locais.
 
 ## Decisões técnicas
 

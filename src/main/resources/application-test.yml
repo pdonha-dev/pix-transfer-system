@@ -46,3 +46,6 @@ resilience4j:
         maxThreadPoolSize: 2
         coreThreadPoolSize: 1
         queueCapacity: 1
+pix:
+  test-setup:
+    enabled: true

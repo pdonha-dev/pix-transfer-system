@@ -1,9 +1,6 @@
 spring:
   application:
     name: pix-transfer-system
-  profiles:
-    active: dev
-
 springdoc:
   swagger-ui:
     path: /swagger-ui.html

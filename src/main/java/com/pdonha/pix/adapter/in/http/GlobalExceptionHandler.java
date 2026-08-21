@@ -2,6 +2,7 @@ package com.pdonha.pix.adapter.in.http;
 
 import com.pdonha.pix.domain.exception.AccountBlockedException;
 import com.pdonha.pix.domain.exception.AccountNotFoundException;
+import com.pdonha.pix.domain.exception.CustomerNotFoundException;
 import com.pdonha.pix.domain.exception.DailyLimitExceededException;
 import com.pdonha.pix.domain.exception.IdempotencyKeyConflictException;
 import com.pdonha.pix.domain.exception.IdempotencyKeyFailedException;
@@ -10,6 +11,7 @@ import com.pdonha.pix.domain.exception.IdempotencyKeyStillProcessingException;
 import com.pdonha.pix.domain.exception.InsufficientBalanceException;
 import com.pdonha.pix.domain.exception.OptimisticLockException;
 import com.pdonha.pix.domain.exception.PixKeyNotFoundException;
+import org.springframework.dao.DataIntegrityViolationException;
 import com.pdonha.pix.domain.exception.TransferAuthorizationDeniedException;
 import com.pdonha.pix.domain.exception.TransferAuthorizationUnavailableException;
 import org.springframework.dao.OptimisticLockingFailureException;
@@ -22,6 +24,7 @@ import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
 import java.net.URI;
+import java.sql.SQLException;
 
 @RestControllerAdvice
 public class GlobalExceptionHandler {
@@ -34,6 +37,22 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(AccountNotFoundException.class)
     public ResponseEntity<ProblemDetail> handleAccountNotFound(AccountNotFoundException exception) {
         return problem(HttpStatus.NOT_FOUND, "ACCOUNT_NOT_FOUND", "Account not found", exception.getMessage());
+    }
+
+    @ExceptionHandler(CustomerNotFoundException.class)
+    public ResponseEntity<ProblemDetail> handleCustomerNotFound(CustomerNotFoundException exception) {
+        return problem(HttpStatus.NOT_FOUND, "CUSTOMER_NOT_FOUND", "Customer not found", exception.getMessage());
+    }
+
+    @ExceptionHandler(DataIntegrityViolationException.class)
+    public ResponseEntity<ProblemDetail> handleDataIntegrityViolation(
+            DataIntegrityViolationException exception) {
+        if (!isUniqueConstraintViolation(exception)) {
+            return problem(HttpStatus.INTERNAL_SERVER_ERROR, "INTERNAL_ERROR", "Internal server error",
+                    "An unexpected error occurred");
+        }
+        return problem(HttpStatus.CONFLICT, "DUPLICATE_RESOURCE", "Duplicate resource",
+                "A resource with the same unique value already exists");
     }
 
     @ExceptionHandler(IdempotencyKeyInvalidException.class)
@@ -117,5 +136,17 @@ public class GlobalExceptionHandler {
         problem.setType(URI.create("/problems/" + code.toLowerCase().replace('_', '-')));
         problem.setProperty("error_code", code);
         return ResponseEntity.status(status).body(problem);
+    }
+
+    private boolean isUniqueConstraintViolation(Throwable exception) {
+        Throwable current = exception;
+        while (current != null) {
+            if (current instanceof SQLException sqlException
+                    && "23505".equals(sqlException.getSQLState())) {
+                return true;
+            }
+            current = current.getCause();
+        }
+        return false;
     }
 }

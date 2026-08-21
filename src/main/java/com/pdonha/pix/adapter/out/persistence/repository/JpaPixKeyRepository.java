@@ -8,11 +8,13 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Component;
 
 import java.util.UUID;
+import java.util.List;
 import java.util.Optional;
 
 // Spring Data JPA Repository (internal)
 interface SpringDataPixKeyRepository extends JpaRepository<PixKeyJpaEntity, UUID> {
     Optional<PixKeyJpaEntity> findByKeyValue(String keyValue);
+    List<PixKeyJpaEntity> findAllByAccountId(UUID accountId);
 }
 
 // Domain Port Implementation
@@ -32,6 +34,13 @@ public class JpaPixKeyRepository implements PixKeyRepository {
         return springRepo.findByKeyValue(key)
             .map(converter::toDomain)
             .orElse(null);
+    }
+
+    @Override
+    public List<PixKey> findAllByAccountId(UUID accountId) {
+        return springRepo.findAllByAccountId(accountId).stream()
+                .map(converter::toDomain)
+                .toList();
     }
     
     @Override
