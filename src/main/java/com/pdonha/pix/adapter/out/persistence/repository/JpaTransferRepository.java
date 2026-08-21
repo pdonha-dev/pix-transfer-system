@@ -35,6 +35,13 @@ public class JpaTransferRepository implements TransferRepository {
     @Override
     public void save(Transfer transfer) {
         TransferJpaEntity entity = converter.toJpaEntity(transfer);
-        springRepo.save(entity);
+        TransferJpaEntity existing = springRepo.findById(transfer.getId()).orElse(null);
+        
+        if (existing != null) {
+            entity.setVersion(existing.getVersion());
+            entity = springRepo.saveAndFlush(entity);
+        } else {
+            springRepo.save(entity);
+        }
     }
 }

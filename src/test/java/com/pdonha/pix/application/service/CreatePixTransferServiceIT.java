@@ -11,6 +11,7 @@ import com.pdonha.pix.domain.model.Money;
 import com.pdonha.pix.domain.model.PixKey;
 import com.pdonha.pix.domain.model.PixKeyType;
 import com.pdonha.pix.domain.model.TransferStatus;
+import jakarta.persistence.EntityManager;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -38,6 +39,9 @@ class CreatePixTransferServiceIT {
 
     @Autowired
     private JpaTransferRepository transferRepository;
+
+    @Autowired
+    private EntityManager entityManager;
 
     @Test
     @Transactional
@@ -80,6 +84,8 @@ class CreatePixTransferServiceIT {
         );
 
         var result = service.execute(cmd);
+
+        entityManager.clear();
 
         // Assert
         assertNotNull(result.getTransferId());
@@ -185,6 +191,9 @@ class CreatePixTransferServiceIT {
         );
 
         var result = service.execute(cmd);
+
+        entityManager.flush();
+        entityManager.clear();
 
         // Assert - verify transfer persisted
         var transferLoaded = transferRepository.findById(result.getTransferId());
