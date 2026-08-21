@@ -1,21 +1,39 @@
 package com.pdonha.pix.adapter.in.http.response;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
+import io.swagger.v3.oas.annotations.media.Schema;
 import com.pdonha.pix.domain.model.TransferStatus;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.UUID;
 
+@Schema(description = "Response containing the created PIX transfer details")
 public class CreatePixTransferResponse {
     @JsonProperty("transfer_id")
+    @Schema(
+        description = "Unique transfer identifier (UUID)",
+        example = "550e8400-e29b-41d4-a716-446655440000"
+    )
     private UUID transferId;
 
+    @Schema(
+        description = "Current transfer status (PENDING, COMPLETED, FAILED, CANCELLED)",
+        example = "PENDING"
+    )
     private String status;
 
+    @Schema(
+        description = "Transfer amount in BRL (Real)",
+        example = "100.00"
+    )
     private BigDecimal amount;
 
     @JsonProperty("created_at")
+    @Schema(
+        description = "Transfer creation timestamp (ISO 8601)",
+        example = "2026-08-20T20:00:00Z"
+    )
     private LocalDateTime createdAt;
 
     public CreatePixTransferResponse() {}

@@ -3,3 +3,28 @@ spring:
     name: pix-transfer-system
   profiles:
     active: dev
+
+springdoc:
+  swagger-ui:
+    path: /swagger-ui.html
+    enabled: true
+    operationsSorter: method
+    tagsSorter: alpha
+  api-docs:
+    path: /api-docs
+  show-actuator: false
+  info:
+    title: PIX Transfer System API
+    version: 1.0.0
+    description: |
+      REST API for managing PIX (Brazilian instant payment) transfers.
+      
+      This API implements Hexagonal Architecture with Domain-Driven Design principles.
+      
+      **Authentication:** Not yet implemented
+      **Base URL:** /api/v1
+    contact:
+      name: Pedro Donha
+      email: hnriq.donha@gmail.com
+    license:
+      name: Apache 2.0
