@@ -12,6 +12,9 @@ public class TransferJpaEntity {
     @Id
     private UUID id;
     
+    @Version
+    private Long version;
+    
     @Column(name = "payer_account_id", nullable = false)
     private UUID payerAccountId;
     
@@ -84,5 +87,13 @@ public class TransferJpaEntity {
     
     public void setUpdatedAt(LocalDateTime updatedAt) {
         this.updatedAt = updatedAt;
+    }
+
+    public Long getVersion() {
+        return version;
+    }
+
+    public void setVersion(Long version) {
+        this.version = version;
     }
 }

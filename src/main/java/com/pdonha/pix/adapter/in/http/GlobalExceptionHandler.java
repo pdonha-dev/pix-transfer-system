@@ -4,6 +4,7 @@ import com.pdonha.pix.domain.exception.AccountNotFoundException;
 import com.pdonha.pix.domain.exception.IdempotencyKeyFailedException;
 import com.pdonha.pix.domain.exception.IdempotencyKeyInvalidException;
 import com.pdonha.pix.domain.exception.IdempotencyKeyStillProcessingException;
+import com.pdonha.pix.domain.exception.OptimisticLockException;
 import com.pdonha.pix.domain.exception.PixKeyNotFoundException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -60,6 +61,15 @@ public class GlobalExceptionHandler {
                 HttpStatus.UNPROCESSABLE_ENTITY,
                 "IDEMPOTENCY_KEY_FAILED",
                 ex.getMessage()
+        );
+    }
+
+    @ExceptionHandler(OptimisticLockException.class)
+    public ResponseEntity<Map<String, Object>> handleOptimisticLock(OptimisticLockException ex) {
+        return buildErrorResponse(
+                HttpStatus.CONFLICT,
+                "OPTIMISTIC_LOCK_FAILED",
+                "Resource was modified concurrently. Please retry the operation."
         );
     }
 

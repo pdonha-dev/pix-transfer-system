@@ -12,6 +12,9 @@ public class AccountJpaEntity {
     @Id
     private UUID id;
     
+    @Version
+    private Long version;
+    
     @Column(name = "customer_id", nullable = false)
     private UUID customerId;
     
@@ -95,5 +98,13 @@ public class AccountJpaEntity {
     
     public void setUpdatedAt(LocalDateTime updatedAt) {
         this.updatedAt = updatedAt;
+    }
+
+    public Long getVersion() {
+        return version;
+    }
+
+    public void setVersion(Long version) {
+        this.version = version;
     }
 }
