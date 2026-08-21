@@ -1,0 +1,168 @@
+name: CI - Build & Test
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+
+env:
+  JAVA_VERSION: '21'
+  MAVEN_VERSION: '3.9.8'
+
+jobs:
+  validate:
+    name: Validate & Lint
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          java-version: ${{ env.JAVA_VERSION }}
+          distribution: 'eclipse-temurin'
+          cache: maven
+
+      - name: Run Maven compile (triggers CheckStyle validation)
+        run: mvn clean compile -B -V
+
+  test:
+    name: Unit & Integration Tests
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: pix_transfer_test
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          java-version: ${{ env.JAVA_VERSION }}
+          distribution: 'eclipse-temurin'
+          cache: maven
+
+      - name: Wait for PostgreSQL
+        run: |
+          until pg_isready -h localhost -p 5432 -U postgres; do
+            sleep 2
+          done
+
+      - name: Run Unit & Integration Tests
+        run: mvn verify -B -V -Dnet.bytebuddy.experimental=true
+        env:
+          SPRING_DATASOURCE_URL: jdbc:postgresql://localhost:5432/pix_transfer_test
+          SPRING_DATASOURCE_USERNAME: postgres
+          SPRING_DATASOURCE_PASSWORD: postgres
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results
+          path: target/surefire-reports/
+
+      - name: Upload coverage reports
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-reports
+          path: target/site/jacoco/
+
+  build:
+    name: Build Package
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          java-version: ${{ env.JAVA_VERSION }}
+          distribution: 'eclipse-temurin'
+          cache: maven
+
+      - name: Build JAR package
+        run: mvn package -B -V -DskipTests
+
+      - name: Upload JAR artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: pix-transfer-system
+          path: target/*.jar
+          retention-days: 30
+
+  sonarqube:
+    name: Code Quality Analysis
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          java-version: ${{ env.JAVA_VERSION }}
+          distribution: 'eclipse-temurin'
+          cache: maven
+
+      - name: SonarQube Analysis
+        run: >-
+          mvn verify 
+          -B -V 
+          -DskipTests 
+          -Dsonar.projectKey=${{ github.event.repository.name }}
+          -Dsonar.sources=src/main
+          -Dsonar.tests=src/test
+          -Dsonar.coverage.jacoco.xmlReportPaths=target/site/jacoco/jacoco.xml
+        env:
+          SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
+          SONAR_LOGIN: ${{ secrets.SONAR_TOKEN }}
+
+  summary:
+    name: Build Summary
+    needs: [ validate, test, build, sonarqube ]
+    runs-on: ubuntu-latest
+    if: always()
+    steps:
+      - name: Print CI Summary
+        run: |
+          echo "✅ CI Pipeline Complete"
+          echo "Jobs Status:"
+          echo "  - Validate: ${{ needs.validate.result }}"
+          echo "  - Test: ${{ needs.test.result }}"
+          echo "  - Build: ${{ needs.build.result }}"
+          echo "  - SonarQube: ${{ needs.sonarqube.result }}"
+
+      - name: Fail if any job failed
+        if: |
+          needs.validate.result == 'failure' ||
+          needs.test.result == 'failure' ||
+          needs.build.result == 'failure'
+        run: exit 1
