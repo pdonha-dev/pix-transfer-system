@@ -84,6 +84,18 @@ public class IdempotencyKey {
         transitionTo(IdempotencyStatus.FAILED);
     }
 
+    public void markRetryable() {
+        transitionTo(IdempotencyStatus.RETRYABLE);
+    }
+
+    public void resumeProcessing() {
+        if (status != IdempotencyStatus.RETRYABLE) {
+            throw new InvalidIdempotencyKeyException("Only retryable idempotency keys can resume processing");
+        }
+        status = IdempotencyStatus.PENDING;
+        updatedAt = LocalDateTime.now();
+    }
+
     private void transitionTo(IdempotencyStatus newStatus) {
         if (status != IdempotencyStatus.PENDING) {
             throw new InvalidIdempotencyKeyException("Only pending idempotency keys can change status");

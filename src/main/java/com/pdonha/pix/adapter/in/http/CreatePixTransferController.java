@@ -52,6 +52,10 @@ public class CreatePixTransferController {
             description = "Conflict - Idempotency-Key is still processing from previous request"
         ),
         @ApiResponse(
+            responseCode = "503",
+            description = "Transfer authorization dependency is temporarily unavailable"
+        ),
+        @ApiResponse(
             responseCode = "500",
             description = "Internal server error"
         )

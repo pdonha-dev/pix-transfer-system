@@ -1,6 +1,7 @@
 package com.pdonha.pix.application.service;
 
 import com.pdonha.pix.domain.exception.InvalidIdempotencyKeyException;
+import com.pdonha.pix.domain.exception.IdempotencyKeyStillProcessingException;
 import com.pdonha.pix.domain.model.IdempotencyKey;
 import com.pdonha.pix.domain.port.IdempotencyKeyRepository;
 import org.springframework.stereotype.Service;
@@ -30,11 +31,33 @@ public class IdempotencyRecordService {
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void markFailed(String key) {
-        IdempotencyKey record = repository.findByKey(key)
+        IdempotencyKey record = repository.findByKeyForUpdate(key)
                 .orElseThrow(() -> new InvalidIdempotencyKeyException("Idempotency key not found: " + key));
         if (record.getStatus() == com.pdonha.pix.domain.model.IdempotencyStatus.PENDING) {
             record.markFailed();
             repository.save(record);
         }
+    }
+
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void markRetryable(String key) {
+        IdempotencyKey record = repository.findByKeyForUpdate(key)
+                .orElseThrow(() -> new InvalidIdempotencyKeyException("Idempotency key not found: " + key));
+        if (record.getStatus() == com.pdonha.pix.domain.model.IdempotencyStatus.PENDING) {
+            record.markRetryable();
+            repository.save(record);
+        }
+    }
+
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void resume(String key) {
+        IdempotencyKey record = repository.findByKeyForUpdate(key)
+                .orElseThrow(() -> new InvalidIdempotencyKeyException("Idempotency key not found: " + key));
+        if (record.getStatus() != com.pdonha.pix.domain.model.IdempotencyStatus.RETRYABLE) {
+            throw new IdempotencyKeyStillProcessingException(
+                    "Idempotency key is already being processed: " + key);
+        }
+        record.resumeProcessing();
+        repository.save(record);
     }
 }

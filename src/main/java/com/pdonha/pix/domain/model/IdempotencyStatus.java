@@ -6,5 +6,6 @@ import java.util.UUID;
 public enum IdempotencyStatus {
     PENDING,
     SUCCESS,
-    FAILED
+    FAILED,
+    RETRYABLE
 }

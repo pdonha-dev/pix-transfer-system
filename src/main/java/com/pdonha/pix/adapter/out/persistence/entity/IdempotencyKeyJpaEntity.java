@@ -89,6 +89,6 @@ public class IdempotencyKeyJpaEntity {
     }
 
     public enum IdempotencyStatusJpa {
-        PENDING, SUCCESS, FAILED
+        PENDING, SUCCESS, FAILED, RETRYABLE
     }
 }

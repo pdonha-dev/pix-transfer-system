@@ -25,7 +25,7 @@ public class IdempotentTransferAttemptService {
     @Transactional
     public TransferResult execute(String idempotencyKey, UUID transferId, CreatePixTransferCommand command) {
         TransferResult result = createPixTransferService.execute(command, transferId);
-        IdempotencyKey record = idempotencyKeyRepository.findByKey(idempotencyKey)
+        IdempotencyKey record = idempotencyKeyRepository.findByKeyForUpdate(idempotencyKey)
                 .orElseThrow(() -> new InvalidIdempotencyKeyException(
                         "Idempotency key not found during transfer: " + idempotencyKey));
         record.markSuccessful();

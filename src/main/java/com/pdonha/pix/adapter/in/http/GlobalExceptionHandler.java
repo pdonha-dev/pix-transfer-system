@@ -10,8 +10,11 @@ import com.pdonha.pix.domain.exception.IdempotencyKeyStillProcessingException;
 import com.pdonha.pix.domain.exception.InsufficientBalanceException;
 import com.pdonha.pix.domain.exception.OptimisticLockException;
 import com.pdonha.pix.domain.exception.PixKeyNotFoundException;
+import com.pdonha.pix.domain.exception.TransferAuthorizationDeniedException;
+import com.pdonha.pix.domain.exception.TransferAuthorizationUnavailableException;
 import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.ProblemDetail;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.MethodArgumentNotValidException;
@@ -65,6 +68,24 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(AccountBlockedException.class)
     public ResponseEntity<ProblemDetail> handleAccountBlocked(AccountBlockedException exception) {
         return problem(HttpStatus.CONFLICT, "ACCOUNT_BLOCKED", "Account is blocked", exception.getMessage());
+    }
+
+    @ExceptionHandler(TransferAuthorizationDeniedException.class)
+    public ResponseEntity<ProblemDetail> handleAuthorizationDenied(
+            TransferAuthorizationDeniedException exception) {
+        return problem(HttpStatus.UNPROCESSABLE_ENTITY, "TRANSFER_AUTHORIZATION_DENIED",
+                "Transfer authorization denied", exception.getMessage());
+    }
+
+    @ExceptionHandler(TransferAuthorizationUnavailableException.class)
+    public ResponseEntity<ProblemDetail> handleAuthorizationUnavailable(
+            TransferAuthorizationUnavailableException exception) {
+        ProblemDetail body = problem(HttpStatus.SERVICE_UNAVAILABLE,
+                "TRANSFER_AUTHORIZATION_UNAVAILABLE",
+                "Transfer authorization unavailable", exception.getMessage()).getBody();
+        return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
+                .header(HttpHeaders.RETRY_AFTER, "2")
+                .body(body);
     }
 
     @ExceptionHandler({

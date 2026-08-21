@@ -28,3 +28,60 @@ springdoc:
       email: hnriq.donha@gmail.com
     license:
       name: Apache 2.0
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,circuitbreakers,circuitbreakerevents,retries,retryevents,bulkheads,bulkheadevents
+  endpoint:
+    health:
+      show-details: never
+
+resilience4j:
+  circuitbreaker:
+    instances:
+      transferAuthorization:
+        registerHealthIndicator: false
+        slidingWindowType: COUNT_BASED
+        slidingWindowSize: 10
+        minimumNumberOfCalls: 5
+        failureRateThreshold: 50
+        slowCallRateThreshold: 80
+        slowCallDurationThreshold: 1500ms
+        waitDurationInOpenState: 30s
+        permittedNumberOfCallsInHalfOpenState: 3
+        automaticTransitionFromOpenToHalfOpenEnabled: true
+        eventConsumerBufferSize: 20
+        recordExceptions:
+          - java.util.concurrent.TimeoutException
+          - com.pdonha.pix.domain.exception.TransferAuthorizationUnavailableException
+        ignoreExceptions:
+          - com.pdonha.pix.domain.exception.TransferAuthorizationDeniedException
+          - io.github.resilience4j.bulkhead.BulkheadFullException
+  retry:
+    instances:
+      transferAuthorization:
+        maxAttempts: 3
+        waitDuration: 100ms
+        enableExponentialBackoff: true
+        exponentialBackoffMultiplier: 2
+        retryExceptions:
+          - com.pdonha.pix.domain.exception.TransferAuthorizationUnavailableException
+        ignoreExceptions:
+          - java.util.concurrent.TimeoutException
+          - com.pdonha.pix.domain.exception.TransferAuthorizationDeniedException
+          - io.github.resilience4j.circuitbreaker.CallNotPermittedException
+          - io.github.resilience4j.bulkhead.BulkheadFullException
+  timelimiter:
+    instances:
+      transferAuthorization:
+        timeoutDuration: 2s
+        cancelRunningFuture: true
+  thread-pool-bulkhead:
+    instances:
+      transferAuthorization:
+        maxThreadPoolSize: 8
+        coreThreadPoolSize: 4
+        queueCapacity: 16
+        keepAliveDuration: 20ms

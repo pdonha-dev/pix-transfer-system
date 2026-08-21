@@ -22,3 +22,27 @@ spring:
 
 server:
   port: 8080
+
+resilience4j:
+  circuitbreaker:
+    instances:
+      transferAuthorization:
+        slidingWindowSize: 4
+        minimumNumberOfCalls: 2
+        waitDurationInOpenState: 1s
+  retry:
+    instances:
+      transferAuthorization:
+        maxAttempts: 2
+        waitDuration: 5ms
+        enableExponentialBackoff: false
+  timelimiter:
+    instances:
+      transferAuthorization:
+        timeoutDuration: 250ms
+  thread-pool-bulkhead:
+    instances:
+      transferAuthorization:
+        maxThreadPoolSize: 2
+        coreThreadPoolSize: 1
+        queueCapacity: 1

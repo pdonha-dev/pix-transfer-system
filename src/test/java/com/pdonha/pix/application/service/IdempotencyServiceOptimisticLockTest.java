@@ -4,6 +4,8 @@ import com.pdonha.pix.application.dto.command.CreatePixTransferCommand;
 import com.pdonha.pix.application.dto.result.TransferResult;
 import com.pdonha.pix.domain.model.Money;
 import com.pdonha.pix.domain.model.TransferStatus;
+import com.pdonha.pix.domain.model.TransferAuthorizationDecision;
+import com.pdonha.pix.domain.port.TransferAuthorizationPort;
 import jakarta.persistence.OptimisticLockException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -24,6 +26,7 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.lenient;
 
 @ExtendWith(MockitoExtension.class)
 class IdempotencyServiceOptimisticLockTest {
@@ -34,14 +37,18 @@ class IdempotencyServiceOptimisticLockTest {
     private IdempotentTransferAttemptService attemptService;
     @Mock
     private CreatePixTransferService transferService;
+    @Mock
+    private TransferAuthorizationPort authorizationPort;
 
     private IdempotencyService service;
     private CreatePixTransferCommand command;
 
     @BeforeEach
     void setUp() {
-        service = new IdempotencyService(recordService, attemptService, transferService);
+        service = new IdempotencyService(recordService, attemptService, transferService, authorizationPort);
         command = new CreatePixTransferCommand("key1", "key2", BigDecimal.TEN);
+        lenient().when(authorizationPort.authorize(any(), any(), any(), any()))
+                .thenReturn(TransferAuthorizationDecision.approved("AUTH-TEST"));
     }
 
     @Test

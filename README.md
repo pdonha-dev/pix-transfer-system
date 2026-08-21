@@ -12,6 +12,7 @@ O projeto reproduz desafios comuns em bancos e fintechs: impedir movimentações
 - Spring Boot 3.3.2
 - Spring Web e Bean Validation
 - Spring Data JPA e Hibernate
+- Resilience4j 2.2
 - PostgreSQL 16
 - Flyway
 - OpenAPI 3 e Swagger UI
@@ -29,6 +30,7 @@ O projeto reproduz desafios comuns em bancos e fintechs: impedir movimentações
 - fingerprint SHA-256 para impedir reutilização da chave com outro payload;
 - optimistic locking com `@Version`;
 - retry de conflitos otimistas em transações independentes;
+- Circuit Breaker, Retry exponencial, TimeLimiter e ThreadPool Bulkhead;
 - ledger imutável com lançamentos de débito e crédito;
 - Transactional Outbox persistida junto da transferência;
 - auditoria JPA com `created_by` e `last_modified_by`;
@@ -123,6 +125,28 @@ Eventos são persistidos na tabela `event_store` durante a mesma transação da 
 
 O projeto não afirma usar Event Sourcing: estado dos agregados não é reconstruído por replay.
 
+### Resiliência de integrações
+
+Resilience4j protege a fronteira de autorização de transferências:
+
+- Circuit Breaker interrompe chamadas durante falhas recorrentes;
+- Retry repete somente falhas transitórias, com backoff exponencial;
+- TimeLimiter limita o tempo da autorização;
+- ThreadPool Bulkhead isola threads e limita fila/concorrência.
+
+Essas políticas não envolvem a transação financeira. Cancelar uma chamada JDBC
+não prova que o commit foi interrompido e poderia incentivar repetição de uma
+transferência já efetivada. A autorização é somente leitura, idempotente e ocorre
+antes da gravação de saldos, ledger e outbox.
+
+O adapter local aprova autorizações para permitir execução independente. A
+fronteira está pronta para substituição por cliente HTTP de antifraude ou
+autorizador externo.
+
+Falhas transitórias deixam a chave idempotente como `RETRYABLE`, permitindo nova
+tentativa segura com o mesmo transfer ID. Recusas definitivas ficam registradas
+como `FAILED`.
+
 ## API
 
 ### Criar transferência
@@ -171,6 +195,8 @@ Erros seguem RFC 7807:
 - Swagger UI: `http://localhost:8080/swagger-ui.html`
 - OpenAPI JSON: `http://localhost:8080/api-docs`
 - Health check: `http://localhost:8080/actuator/health`
+- Métricas: `http://localhost:8080/actuator/metrics`
+- Circuit Breakers: `http://localhost:8080/actuator/circuitbreakers`
 
 ## Executando com Docker
 
@@ -218,10 +244,10 @@ mvn clean verify
 
 O pipeline atual executa:
 
-- 87 testes unitários e arquiteturais;
+- 98 testes unitários e arquiteturais;
 - 11 testes de integração;
-- 98 testes no total;
-- cobertura JaCoCo de 76,81% das linhas;
+- 109 testes no total;
+- cobertura JaCoCo de 76,51% das linhas;
 - validação das dependências arquiteturais;
 - testes de concorrência com PostgreSQL real.
 
@@ -257,7 +283,6 @@ As migrations atuais cobrem:
 
 ## Próximas evoluções
 
-- Resilience4j: Circuit Breaker, Retry, TimeLimiter e Bulkhead;
 - OAuth2 Resource Server com JWT;
 - logs estruturados e correlation ID;
 - métricas Prometheus com Micrometer;

@@ -7,8 +7,13 @@ import com.pdonha.pix.domain.exception.IdempotencyKeyConflictException;
 import com.pdonha.pix.domain.exception.IdempotencyKeyInvalidException;
 import com.pdonha.pix.domain.exception.IdempotencyKeyStillProcessingException;
 import com.pdonha.pix.domain.exception.RetryInterruptedException;
+import com.pdonha.pix.domain.exception.TransferAuthorizationDeniedException;
+import com.pdonha.pix.domain.exception.TransferAuthorizationUnavailableException;
 import com.pdonha.pix.domain.model.IdempotencyKey;
 import com.pdonha.pix.domain.model.IdempotencyStatus;
+import com.pdonha.pix.domain.model.Money;
+import com.pdonha.pix.domain.model.TransferAuthorizationDecision;
+import com.pdonha.pix.domain.port.TransferAuthorizationPort;
 import jakarta.persistence.OptimisticLockException;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.dao.OptimisticLockingFailureException;
@@ -27,13 +32,16 @@ public class IdempotencyService {
     private final IdempotencyRecordService idempotencyRecordService;
     private final IdempotentTransferAttemptService transferAttemptService;
     private final CreatePixTransferService createPixTransferService;
+    private final TransferAuthorizationPort transferAuthorizationPort;
 
     public IdempotencyService(IdempotencyRecordService idempotencyRecordService,
                              IdempotentTransferAttemptService transferAttemptService,
-                             CreatePixTransferService createPixTransferService) {
+                             CreatePixTransferService createPixTransferService,
+                             TransferAuthorizationPort transferAuthorizationPort) {
         this.idempotencyRecordService = idempotencyRecordService;
         this.transferAttemptService = transferAttemptService;
         this.createPixTransferService = createPixTransferService;
+        this.transferAuthorizationPort = transferAuthorizationPort;
     }
 
     private static final int MAX_ATTEMPTS = 3;
@@ -47,17 +55,48 @@ public class IdempotencyService {
         String requestHash = requestHash(command);
         Optional<IdempotencyKey> existing = idempotencyRecordService.findByKey(idempotencyKey);
 
+        UUID transferId;
         if (existing.isPresent()) {
-            return resolveExisting(existing.get(), requestHash);
+            IdempotencyKey record = existing.get();
+            validateRequestHash(record, requestHash);
+            if (record.getStatus() == IdempotencyStatus.SUCCESS) {
+                return createPixTransferService.getTransferResult(record.getTransferId());
+            }
+            if (record.getStatus() == IdempotencyStatus.PENDING) {
+                throw stillProcessing(record);
+            }
+            if (record.getStatus() == IdempotencyStatus.FAILED) {
+                throw previouslyFailed(record);
+            }
+            transferId = record.getTransferId();
+            idempotencyRecordService.resume(idempotencyKey);
+        } else {
+            transferId = UUID.randomUUID();
+            try {
+                idempotencyRecordService.reserve(new IdempotencyKey(idempotencyKey, transferId, requestHash));
+            } catch (DataIntegrityViolationException exception) {
+                IdempotencyKey concurrentRecord = idempotencyRecordService.findByKey(idempotencyKey)
+                        .orElseThrow(() -> exception);
+                return resolveConcurrent(concurrentRecord, requestHash);
+            }
         }
 
-        UUID transferId = UUID.randomUUID();
         try {
-            idempotencyRecordService.reserve(new IdempotencyKey(idempotencyKey, transferId, requestHash));
-        } catch (DataIntegrityViolationException exception) {
-            IdempotencyKey concurrentRecord = idempotencyRecordService.findByKey(idempotencyKey)
-                    .orElseThrow(() -> exception);
-            return resolveExisting(concurrentRecord, requestHash);
+            TransferAuthorizationDecision decision = transferAuthorizationPort.authorize(
+                    transferId,
+                    command.getOriginPixKey(),
+                    command.getDestinationPixKey(),
+                    new Money(command.getAmount())
+            );
+            if (!decision.authorized()) {
+                throw new TransferAuthorizationDeniedException("Transfer authorization was denied");
+            }
+        } catch (TransferAuthorizationUnavailableException exception) {
+            markRetryablePreserving(idempotencyKey, exception);
+            throw exception;
+        } catch (RuntimeException exception) {
+            markFailedPreserving(idempotencyKey, exception);
+            throw exception;
         }
 
         for (int attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
@@ -82,19 +121,35 @@ public class IdempotencyService {
         throw new IllegalStateException("Retry loop completed without result");
     }
 
-    private TransferResult resolveExisting(IdempotencyKey key, String requestHash) {
+    private TransferResult resolveConcurrent(IdempotencyKey key, String requestHash) {
+        validateRequestHash(key, requestHash);
+        if (key.getStatus() == IdempotencyStatus.SUCCESS) {
+            return createPixTransferService.getTransferResult(key.getTransferId());
+        }
+        if (key.getStatus() == IdempotencyStatus.FAILED) {
+            throw previouslyFailed(key);
+        }
+        if (key.getStatus() == IdempotencyStatus.RETRYABLE) {
+            throw new TransferAuthorizationUnavailableException(
+                    "Transfer authorization can be retried: " + key.getKey());
+        }
+        throw stillProcessing(key);
+    }
+
+    private void validateRequestHash(IdempotencyKey key, String requestHash) {
         if (!key.getRequestHash().startsWith("legacy:")
                 && !key.getRequestHash().equals(requestHash)) {
             throw new IdempotencyKeyConflictException("Idempotency key was already used with a different request");
         }
-        if (key.getStatus() == IdempotencyStatus.SUCCESS) {
-            return createPixTransferService.getTransferResult(key.getTransferId());
-        }
-        if (key.getStatus() == IdempotencyStatus.PENDING) {
-            throw new IdempotencyKeyStillProcessingException(
-                    "Idempotency key still processing from previous request: " + key.getKey());
-        }
-        throw new IdempotencyKeyFailedException(
+    }
+
+    private IdempotencyKeyStillProcessingException stillProcessing(IdempotencyKey key) {
+        return new IdempotencyKeyStillProcessingException(
+                "Idempotency key still processing from previous request: " + key.getKey());
+    }
+
+    private IdempotencyKeyFailedException previouslyFailed(IdempotencyKey key) {
+        return new IdempotencyKeyFailedException(
                 "Idempotency key failed in previous attempt: " + key.getKey());
     }
 
@@ -106,6 +161,14 @@ public class IdempotencyService {
     private void markFailedPreserving(String idempotencyKey, RuntimeException original) {
         try {
             idempotencyRecordService.markFailed(idempotencyKey);
+        } catch (RuntimeException statusFailure) {
+            original.addSuppressed(statusFailure);
+        }
+    }
+
+    private void markRetryablePreserving(String idempotencyKey, RuntimeException original) {
+        try {
+            idempotencyRecordService.markRetryable(idempotencyKey);
         } catch (RuntimeException statusFailure) {
             original.addSuppressed(statusFailure);
         }
